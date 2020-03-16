@@ -25,5 +25,3 @@ def calc_vector(calc_user, fixed, m, m_ones, res, name, self_items):
         solve_vecs[i] = xu
 
     res[name] = solve_vecs
-    res['test'] = 10
-    return solve_vecs
