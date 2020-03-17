@@ -17,11 +17,11 @@ def eval_rank(args=[]):
             user_item_pred_score.append((i, np.dot(result['p'][u], result['q'][i])))  # tuple list
             user_item_true_value.append((i, test_ones[u, i]))
 
-        sorted_pred = sorted(user_item_pred_score, key=lambda tup: tup[1], reverse=True)
-        sorted_true = sorted(user_item_true_value, key=lambda tup: tup[1], reverse=True)
+        user_item_pred_score.sort(reverse=True)
+        user_item_true_value.sort(reverse=True)
 
-        pred_item_ids, pred_item_scores = zip(*sorted_pred)
-        real_item_ids, real_item_scores = zip(*sorted_true)
+        pred_item_ids, pred_item_scores = zip(*user_item_pred_score)
+        real_item_ids, real_item_scores = zip(*user_item_true_value)
 
         pred.loc[u]['ranked_items'] = pred_item_ids
         pred.loc[u]['score'] = pred_item_scores
@@ -31,3 +31,4 @@ def eval_rank(args=[]):
 
     result_dict = {'pred_rank': pred, 'true_rank': real}
     return result_dict
+
