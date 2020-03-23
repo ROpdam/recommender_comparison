@@ -2,34 +2,30 @@ import pandas as pd
 import numpy as np
 
 def eval_rank(args=[]):
-    result = args[0]
+    model = args[0]
     users = args[1]
     items = args[2]
     test_ones = args[3]
     rank_at = args[4]
 
-    pred = pd.DataFrame(index=users, columns=['score', 'ranked_items'])
-    real = pd.DataFrame(index=users, columns=['score', 'ranked_items'])
+    result_df = pd.DataFrame(index=users, columns=['scores_ranked', 'pred_items_ranked', 'true_id'])
 
     for u in users:
         user_item_pred_score = []
-        user_item_true_value = []
+        true_items = []
+        for true_item in np.nonzero(test_ones[u].toarray()[0] > 0):
+            true_items.append(true_item)
+            
         for i in items:
-            user_item_pred_score.append((np.dot(result['p'][u], result['q'][i]), i))  # tuple list
-            user_item_true_value.append((test_ones[u, i], i))
+            prediction = np.dot(model['p'][u], model['q'][i].T)
+            user_item_pred_score.append((prediction, i))  # tuple list
 
-        user_item_pred_score.sort(reverse=True)
-        user_item_true_value.sort(reverse=True)
+        user_item_pred_score.sort(reverse=True) #np.argpartition
+        pred_item_scores, pred_item_ids = zip(*user_item_pred_score[:rank_at])
 
-        pred_item_ids, pred_item_scores = zip(*user_item_pred_score[:rank_at])
-        real_item_ids, real_item_scores = zip(*user_item_true_value[:rank_at])
+        result_df.loc[u]['scores_ranked'] = pred_item_scores
+        result_df.loc[u]['pred_items_ranked'] = pred_item_ids
+        result_df.loc[u]['true_id'] = true_item
 
-        pred.loc[u]['ranked_items'] = pred_item_ids
-        pred.loc[u]['score'] = pred_item_scores
-
-        real.loc[u]['ranked_items'] = real_item_ids
-        real.loc[u]['score'] = real_item_scores
-
-    result_dict = {'pred_rank': pred, 'true_rank': real}
-    return result_dict
+    return result_df
 
