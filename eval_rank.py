@@ -17,7 +17,7 @@ def eval_rank(args=[]):
             true_items.append(true_item)
             
         for i in items:
-            prediction = np.dot(model['p'][u], model['q'][i].T)
+            prediction = model['b'][i] + np.dot(model['p'][u], model['q'][i].T)
             user_item_pred_score.append((prediction, i))  # tuple list
 
         user_item_pred_score.sort(reverse=True) #np.argpartition
