@@ -25,7 +25,7 @@ def eval_rank(args=[]):
 
         result_df.loc[u]['scores_ranked'] = pred_item_scores
         result_df.loc[u]['pred_items_ranked'] = pred_item_ids
-        result_df.loc[u]['true_id'] = true_item
+        result_df.loc[u]['true_id'] = true_items
 
     return result_df
 
