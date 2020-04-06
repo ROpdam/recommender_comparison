@@ -12,7 +12,7 @@ def eval_rank(args=[]):
 
     for u in users:
         user_item_pred_score = []
-        true_items = []
+#         true_items = []
         for true_item in np.nonzero(test_ones[u].toarray()[0] > 0):
             true_items.append(true_item)
             
