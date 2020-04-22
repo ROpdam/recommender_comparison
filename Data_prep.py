@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 def leave_users_out(full_data, leave_out, seed=1234):
     np.random.seed(seed)
@@ -89,3 +90,49 @@ def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_ite
         print('Users deleted:', len(deleted_users.user_id.unique()))
 
     return total_users, total_items, train_set, val_set, test_set
+
+
+def get_x_y_sequences_ordered(dataset, n_unknowns_in_y=1, stats=True):
+    user_sequences_x = []
+    user_sequences_y = []
+    lengths = []
+    users = dataset.user_id.unique()
+    shortest_u_seq_order = list(df.groupby('user_id')['item_id'].count().sort_values().index)
+
+    for u in shortest_u_seq_order:
+        user_item_seq = np.array(dataset[dataset['user_id'] == u]['item_id'])
+        user_sequences_x.append(user_item_seq[:-n_unknowns_in_y])
+        user_sequences_y.append(user_item_seq[n_unknowns_in_y:])
+        lengths.append(len(user_item_seq))
+
+    median = np.median(lengths)
+
+    if stats:
+        print('Number of sequences x:', len(user_sequences_x),
+              '\nAvg sequence length x:', np.average(lengths),
+              '\nStd_dev sequence length x:', np.round(np.std(lengths), 2),
+              '\nMedian of sequence length x:', median)
+
+    return user_sequences_x, user_sequences_y, shortest_u_seq_order
+
+
+def min_padding(sequences, batch_size, max_len):
+    padded_sequences = []
+    batch = []
+    max_batch_seq_len = 0
+    for i, seq in enumerate(sequences):
+        batch.append(seq)
+        if max_batch_seq_len > max_len:
+            max_batch_seq_len = max_len
+
+        elif max_batch_seq_len < len(seq):
+            max_batch_seq_len = len(seq)
+
+        if (i + 1) % batch_size == 0:
+            padded_sequences.append(
+                tf.keras.preprocessing.sequence.pad_sequences(batch, maxlen=int(max_batch_seq_len), padding='post',
+                                                              truncating='pre'))
+            max_batch_seq_len = 0
+            batch = []
+
+    return padded_sequences
