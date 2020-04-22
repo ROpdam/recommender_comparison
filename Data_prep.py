@@ -92,17 +92,20 @@ def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_ite
     return total_users, total_items, train_set, val_set, test_set
 
 
-def get_x_y_sequences_ordered(dataset, n_unknowns_in_y=1, stats=True):
+def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
     user_sequences_x = []
     user_sequences_y = []
     lengths = []
-    users = dataset.user_id.unique()
-    shortest_u_seq_order = list(df.groupby('user_id')['item_id'].count().sort_values().index)
+    
+    if ordered:
+        users = list(dataset.groupby('user_id')['item_id'].count().sort_values().index) #ordered, shortest first
+    else:
+        users = dataset.user_id.unique()
 
-    for u in shortest_u_seq_order:
+    for u in users:
         user_item_seq = np.array(dataset[dataset['user_id'] == u]['item_id'])
-        user_sequences_x.append(user_item_seq[:-n_unknowns_in_y])
-        user_sequences_y.append(user_item_seq[n_unknowns_in_y:])
+        user_sequences_x.append(user_item_seq[:-shift])
+        user_sequences_y.append(user_item_seq[shift:])
         lengths.append(len(user_item_seq))
 
     median = np.median(lengths)
@@ -112,8 +115,11 @@ def get_x_y_sequences_ordered(dataset, n_unknowns_in_y=1, stats=True):
               '\nAvg sequence length x:', np.average(lengths),
               '\nStd_dev sequence length x:', np.round(np.std(lengths), 2),
               '\nMedian of sequence length x:', median)
-
-    return user_sequences_x, user_sequences_y, shortest_u_seq_order
+    
+    if ordered: 
+        return user_sequences_x, user_sequences_y, users
+    else:
+        return user_sequences_x, user_sequences_y, median
 
 
 def min_padding(sequences, batch_size, max_len):
@@ -136,3 +142,13 @@ def min_padding(sequences, batch_size, max_len):
             batch = []
 
     return padded_sequences
+
+
+def standard_padding(sequences, max_length, stats=True):
+    padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=int(max_length), padding='post', truncating='pre')
+    if stats:
+        print('number of sequences:', padded_sequences.shape[0], 
+              '\navg sequence length:', np.average([i.shape[0] for i in padded_sequences]),
+              '\nstd_dev sequence length:', np.std([i.shape[0] for i in padded_sequences]))
+        
+    return tf.data.Dataset.from_tensor_slices(padded_sequences)

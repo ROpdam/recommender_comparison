@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def get_predictions(model, train_set, test_set, rank_at, temp=0.9):
+def get_predictions(model, train_set, test_set, rank_at, temp=1):
     predictions_df = pd.DataFrame(columns=['user', 'pred_items_ranked', 'true_id'])
     for u in test_set.user_id.unique():
         test_user_seq = np.array(train_set[train_set['user_id'] == u]['item_id'])
@@ -62,7 +62,9 @@ def rank_predictions(model, test_set, rank_at):
 def get_metrics(ranked_df, steps, max_rank):
     s = time.time()
     ranks_at = [1] + [i for i in range(steps, max_rank + steps, steps)]
-    hitcounts = recs_at = precs_at = []
+    hitcounts = []
+    recs_at = []
+    precs_at = []
     metrics = pd.DataFrame(columns=['rank_at', 'hitcounts', 'recall', 'precision'])
     for rank in ranks_at:
         hitcount = 0
