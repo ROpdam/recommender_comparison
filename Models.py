@@ -150,7 +150,7 @@ class BPR():
         auc /= n_users
         return auc
 
-    def store_results(self, log_path, res_name, file_name, params, stats=True):
+    def store_results(self, log_path, res_name, file_name, stats=True):
         result_info = {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'],
                        'train_speed': self.model['train_time'], 'lr': self.model['learning_rate'], 'file': file_name}
         other_info = {'p': self.model['p'],
