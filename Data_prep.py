@@ -122,24 +122,25 @@ def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
         return user_sequences_x, user_sequences_y, median
 
 
-def min_padding(sequences, batch_size, max_len):
+def min_padding(sequences, batch_size, min_len, max_len):
     padded_sequences = []
     batch = []
     max_batch_seq_len = 0
     for i, seq in enumerate(sequences):
-        batch.append(seq)
-        if max_batch_seq_len > max_len:
-            max_batch_seq_len = max_len
+        if len(seq) > min_len:
+            batch.append(seq)
+            if max_batch_seq_len > max_len:
+                max_batch_seq_len = max_len
 
-        elif max_batch_seq_len < len(seq):
-            max_batch_seq_len = len(seq)
+            elif max_batch_seq_len < len(seq):
+                max_batch_seq_len = len(seq)
 
-        if (i + 1) % batch_size == 0:
-            padded_sequences.append(
-                tf.keras.preprocessing.sequence.pad_sequences(batch, maxlen=int(max_batch_seq_len), padding='post',
-                                                              truncating='pre'))
-            max_batch_seq_len = 0
-            batch = []
+            if (i + 1) % batch_size == 0:
+                padded_sequences.append(
+                    tf.keras.preprocessing.sequence.pad_sequences(batch, maxlen=int(max_batch_seq_len), padding='post',
+                                                                  truncating='pre'))
+                max_batch_seq_len = 0
+                batch = []
 
     return padded_sequences
 
