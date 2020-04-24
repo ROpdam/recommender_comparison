@@ -2,9 +2,16 @@ import numpy as np
 import tensorflow as tf
 
 def leave_users_out(full_data, leave_out, seed=1234):
+    """
+    Leaves leave_out number of users out of the full dataset
+    :param full_data: pandas df containing user_id, item_id sorted on datetime per user (ascending)
+    :param leave_out: number of users to leave out
+    :param seed: set seed for picking the same users
+    :return: full_data df without leave_out users and the left out subset of leave_out users
+    """
     np.random.seed(seed)
     full_data['index'] = full_data.index
-    user_index_df = full_data.groupby('user')['index'].apply(list)
+    user_index_df = full_data.groupby('user_id')['index'].apply(list) #TODO: Double check change from 'user' to 'user_id'
     users = np.random.choice(list(user_index_df.index), leave_out, replace=False)
     users_indices = []
 
@@ -19,9 +26,14 @@ def leave_users_out(full_data, leave_out, seed=1234):
 
 def leave_last_x_out(full_data, n_users, leave_out=1, already_picked=[], seed=1234):
     """
-    Input: data must contain user_id
-    Output: full_data = without all last (time order) entries in leave one out set
-            leave_one_out_set = data with one user and one item from full_data
+    Leaves last leave_out items out for all n_users in full_data
+    :param full_data: pandas df containing user_id, item_id sorted on datetime per user (ascending)
+    :param n_users: number of users to leave the last leave_out items out of the full_data
+    :param leave_out: number of last item_ids per user
+    :param already_picked: If method is used again for the same full_data, provide list of users to not have overlap
+    :param seed: set seed for picking the same users
+    :return: full_data df without leave_out items per users and the left out subset of leave_out item_id(s)
+             per user_id(s)
     """
     np.random.seed(seed)
 
@@ -57,10 +69,15 @@ def leave_last_x_out(full_data, n_users, leave_out=1, already_picked=[], seed=12
 
 def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_items_test, stats=True):
     """
-    Input: df with user and item id, batch size for CFRNN data, val and test perc of users
-           number of last items to leave out for val and test set
-    Output: full_data = total users and items of the original df,
-            Train, validation and test sets
+    Create specific train, validation and test set for recommender systems
+    :param df: pandas df containing user_id, item_id sorted on datetime per user (ascending)
+    :param batch_size: used in the LSTM
+    :param val_perc: percentage of users to use for validation set
+    :param test_perc: percentage of users to use for test set
+    :param n_items_val: number of items to leave out of df and put in the validation set per user
+    :param n_items_test: number of items to leave out of df and put in the test set per user
+    :param stats: print new datasets stats
+    :return: total users and total items from df, train set, validation set and test set
     """
     df['item_id'] = df.item.astype('category').cat.codes
     df['user_id'] = df.user.astype('category').cat.codes
@@ -93,6 +110,15 @@ def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_ite
 
 
 def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
+    """
+
+    :param dataset: pandas df containing user_id, item_id sorted on datetime per user (ascending)
+    :param shift: by how much should the target (y) sequence be shifted
+    :param ordered: should the sequences be ordered by length
+    :param stats: print number of sequences, avg length, std_dev, median
+    :return: list user_sequences_x, list shifted user_sequences_y and pandas df user_order if order is True,
+             else float median
+    """
     user_sequences_x = []
     user_sequences_y = []
     lengths = []
@@ -123,6 +149,16 @@ def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
 
 
 def min_padding(sequences, batch_size, min_len, max_len):
+    """
+    Given a list of sequences sorted on length, this function creates batches where each batch is padded (post)
+    until the length of the longest sequence in the batch. sequences < min_len will be excluded and > max_len
+    will be truncated (pre), NOTE: Batch_Generator needed for use in training of Keras model (see Helpers.py)
+    :param sequences: list of sequences ordered by sequence length per user
+    :param batch_size: number of sequences per batch
+    :param min_len: minimum sequence length for it to be put in a batch
+    :param max_len: maximum sequence length to be truncated
+    :return: list of padded_sequences as numpy arrays
+    """
     padded_sequences = []
     batch = []
     max_batch_seq_len = 0
@@ -146,6 +182,13 @@ def min_padding(sequences, batch_size, min_len, max_len):
 
 
 def standard_padding(sequences, max_length, stats=True):
+    """
+    Pads (post) sequences up until max_length with zeros
+    :param sequences: list of sequences per user
+    :param max_length: maximum length to pad sequences to
+    :param stats: print number of sequences, acg sequence length, st_dev of sequence length
+    :return: tensorflow dataset consisting of the padded sequences
+    """
     padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=int(max_length), padding='post', truncating='pre')
     if stats:
         print('number of sequences:', padded_sequences.shape[0], 

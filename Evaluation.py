@@ -5,6 +5,17 @@ import tensorflow as tf
 
 
 def get_predictions(model, train_set, test_set, rank_at, temp=1):
+    """
+    Uses a Keras model with batch size set to 1 to predict the rest of the sequences from the train_set per user
+    finally puts user, a list pred_items_ranked and a list containing true_ids from the test set
+    :param model: Keras RNN model with batch size set to 1
+    :param train_set: pandas df containing user_id, item_id sorted on datetime per user
+    :param test_set: pandas df containing: user_id, last item_id(s) per user
+    :param rank_at: maximum of top ranked items per user
+    :param temp: temperature, 1 means no deviation from model prediction
+    :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+             true_id extracted from test_set
+    """
     predictions_df = pd.DataFrame(columns=['user', 'pred_items_ranked', 'true_id'])
     for u in test_set.user_id.unique():
         test_user_seq = np.array(train_set[train_set['user_id'] == u]['item_id'])
@@ -30,6 +41,16 @@ def get_predictions(model, train_set, test_set, rank_at, temp=1):
 
 
 def rank_predictions(model, test_set, rank_at, stats=True):
+    """
+    The provided MF model is used to obtain values for all items per user from the test set
+    and rank at rank_at per user, finally the true items are put together in the ranked_df result
+    :param model: dict containing the p (user) and q (item) factors from a matrix factorisation model
+    :param test_set: pandas df containing: user_id, last item_id(s) per user, sorted on datetime per user
+    :param rank_at: maximum of top ranked items per user
+    :param stats: print duration
+    :return: pandas df, where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+             true_id extracted from test_set
+    """
     s = time.time()
     users = test_set.user_id.unique()
     test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
@@ -60,6 +81,14 @@ def rank_predictions(model, test_set, rank_at, stats=True):
 
 
 def get_metrics(ranked_df, steps, max_rank, stats=True):
+    """
+    Computes hitcount@, recall@ and precision@ for the given ranked_df on each step until the max_rank
+    :param ranked_df: pandas df where each row contains, user, a list: pred_items_ranked, a list: true items
+    :param steps: after rank@1 the steps to divide max_rank with and calculate the metrics with
+    :param max_rank: maximum rank to compute the metrics on
+    :param stats: print duration
+    :return: pandas df, where each row represents a rank@ value, the columns represent: hitcount@, recall@, precision@
+    """
     s = time.time()
     ranks_at = [1] + [i for i in range(steps, max_rank + steps, steps)]
     hitcounts = []
@@ -84,4 +113,5 @@ def get_metrics(ranked_df, steps, max_rank, stats=True):
     metrics['precision'] = precs_at
     if stats:
         print('Obtaining metrics time:', round(time.time() - s, 2))
+
     return metrics

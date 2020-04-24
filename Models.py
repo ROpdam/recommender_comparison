@@ -7,6 +7,12 @@ import os
 from sklearn.metrics import roc_auc_score
 
 class BPR():
+    """
+    Bayesian Personalised Ranking
+    :param total_users: the total users before the train test split to be used in the user factor p
+    :param total_items: the total items before the train test split to be used in the item factor q
+    :param params: parameters to be used by the algorithm
+    """
     def __init__(self, total_users, total_items, params):
         self.total_users = total_users
         self.total_items = total_items
@@ -30,6 +36,14 @@ class BPR():
         self.val_users = []
 
     def fit(self, train_set, val_set=[], verbose=1):
+        """
+        Fit BPR to the train_set, if val_set is provided the AUC metrics will be computed and printed per iteration
+        :param train_set: pandas df containing user_id and item_id
+        :param val_set: validation pandas df containing user_id and item_id
+        :param verbose: 1 means print creating samples, loss per iteration and validation AUC during training
+                        (if val_set provided)
+        :return: -None: stores values in self.model
+        """
         # Init
         s = time.time()
         if self.seed > 0:
@@ -110,6 +124,10 @@ class BPR():
         self.model['train_time'] = train_time
 
     def sample(self):
+        """
+        Creates n_iteration user (u), positive item (i), negative item (j), samples of sample_size from the training set
+        :return: list of n_iteration samples of sample size
+        """
         all_uij_samples = []
         for n in range(self.n_iterations):
             uij_samples = []
@@ -131,6 +149,12 @@ class BPR():
         return 1 / (1 + math.exp(-x))
 
     def update_alpha(self, last_loss, it_loss):
+        """
+        Adjust learning rate according to the bold driver principle
+        :param last_loss: loss of previous iteration
+        :param it_loss: current loss
+        :return: -None: changes the learning rate alpha of the model
+        """
         if (last_loss < it_loss):  # bold driver
             self.alpha = 0.5 * self.alpha
             return
@@ -138,6 +162,10 @@ class BPR():
         self.alpha = (1 - self.alpha_decay) * self.alpha
 
     def AUC(self):
+        """
+        Compute AUC of the validation set
+        :return: AUC score
+        """
         auc = 0.0
         n_users = len(self.val_users)
 
@@ -151,6 +179,16 @@ class BPR():
         return auc
 
     def store_results(self, log_path, res_name, file_name, stats=True):
+        """
+        Store the model as a row in a pandas df (pickle) named res_name, stores: train loss, val_auc, train_time,
+        learning_rates, file_name, p and q factors
+        :param log_path: where to store/find the results
+        :param res_name: the name of the results pandas df, if name is not found, a new pandas df is created and
+                         stored (pickle)
+        :param file_name: the name of the dataset file
+        :param stats: print whether new results are created or the current model is added to an existing pandas df
+        :return: -None:
+        """
         result_info = {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'],
                        'train_speed': self.model['train_time'], 'lr': self.model['learning_rate'], 'file': file_name}
         other_info = {'p': self.model['p'],
