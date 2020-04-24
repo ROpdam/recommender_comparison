@@ -29,7 +29,7 @@ def get_predictions(model, train_set, test_set, rank_at, temp=1):
     return predictions_df
 
 
-def rank_predictions(model, test_set, rank_at):
+def rank_predictions(model, test_set, rank_at, stats=True):
     s = time.time()
     users = test_set.user_id.unique()
     test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
@@ -53,13 +53,13 @@ def rank_predictions(model, test_set, rank_at):
 
     ranked_df['pred_items_ranked'] = pred_items_ranked
     ranked_df['true_id'] = true_items_list
-
-    print('Ranking time:', round(time.time() - s, 2))
+    if stats:
+        print('Ranking time:', round(time.time() - s, 2))
 
     return ranked_df
 
 
-def get_metrics(ranked_df, steps, max_rank):
+def get_metrics(ranked_df, steps, max_rank, stats=True):
     s = time.time()
     ranks_at = [1] + [i for i in range(steps, max_rank + steps, steps)]
     hitcounts = []
@@ -82,5 +82,6 @@ def get_metrics(ranked_df, steps, max_rank):
     metrics['hitcounts'] = hitcounts
     metrics['recall'] = recs_at
     metrics['precision'] = precs_at
-    print('Obtaining metrics time:', round(time.time() - s, 2))
+    if stats:
+        print('Obtaining metrics time:', round(time.time() - s, 2))
     return metrics
