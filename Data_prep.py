@@ -173,15 +173,15 @@ def min_padding(sequences, batch_size, min_len, max_len):
 
             if (i + 1) % batch_size == 0:
                 padded_sequences.append(
-                    tf.keras.preprocessing.sequence.pad_sequences(batch, maxlen=int(max_batch_seq_len), padding='post',
-                                                                  truncating='pre'))
+                    tf.keras.preprocessing.sequence.pad_sequences(
+                        batch, maxlen=int(max_batch_seq_len), padding='post', truncating='pre'))
                 max_batch_seq_len = 0
                 batch = []
 
     return padded_sequences
 
 
-def standard_padding(sequences, max_length, stats=True):
+def standard_padding(sequences, max_length, pad_value=0.0, stats=True):
     """
     Pads (post) sequences up until max_length with zeros
     :param sequences: list of sequences per user
@@ -189,7 +189,8 @@ def standard_padding(sequences, max_length, stats=True):
     :param stats: print number of sequences, acg sequence length, st_dev of sequence length
     :return: tensorflow dataset consisting of the padded sequences
     """
-    padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=int(max_length), padding='post', truncating='pre')
+    padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(
+                        sequences, maxlen=int(max_length), padding='post', truncating='pre', value=pad_value)
     if stats:
         print('number of sequences:', padded_sequences.shape[0], 
               '\navg sequence length:', np.average([i.shape[0] for i in padded_sequences]),
