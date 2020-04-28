@@ -102,7 +102,7 @@ class BPR():
             self.model['p'] = p
             self.model['q'] = q
 
-            if len(val_set) > 0:  # TO DO: safe best & early stopping
+            if len(val_set) > 0:  # TODO: safe best & early stopping
                 val_auc = self.AUC()
                 self.model['val_auc'].append(val_auc)
                 if verbose == 1:
