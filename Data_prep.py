@@ -11,20 +11,24 @@ def leave_users_out(full_data, leave_out, seed=1234):
     """
     np.random.seed(seed)
     full_data['index'] = full_data.index
-    user_index_df = full_data.groupby('user_id')['index'].apply(list) #TODO: Double check change from 'user' to 'user_id'
-    users = np.random.choice(list(user_index_df.index), leave_out, replace=False)
+    user_index_df = full_data.groupby('user_id')['index'].apply(list)
     users_indices = []
+
+    if type(leave_out) is list:
+        users = leave_out
+    else:
+        users = np.random.choice(list(user_index_df.index), leave_out, replace=False)
 
     for user in users:
         users_indices.extend(user_index_df.loc[user])
 
-    sub_set = full_data.loc[users_indices]
-    remaining = full_data.drop(users_indices)
+    sub_set = full_data.loc[users_indices].drop(columns=['index'])
+    remaining = full_data.drop(users_indices).drop(columns=['index'])
 
-    return remaining.drop(columns=['index']), sub_set.drop(columns=['index'])
+    return remaining, sub_set
 
 
-def leave_last_x_out(full_data, n_users, leave_out=1, already_picked=[], seed=1234):
+def leave_last_x_out(full_data, n_users, leave_out=1, seqs=False, already_picked=[], seed=1234):
     """
     Leaves last leave_out items out for all n_users in full_data
     :param full_data: pandas df containing user_id, item_id sorted on datetime per user (ascending)
@@ -44,6 +48,9 @@ def leave_last_x_out(full_data, n_users, leave_out=1, already_picked=[], seed=12
     users_picked = []
 
     for i in range(len(full_data.user_id.unique())):
+        if len(users_picked) >= n_users:
+            break
+
         random_user = np.random.choice(users)
         item_indices = user_items_ind[random_user]  # random user's items indices
         if random_user in users_picked or len(item_indices) <= leave_out or random_user in already_picked:
@@ -53,61 +60,94 @@ def leave_last_x_out(full_data, n_users, leave_out=1, already_picked=[], seed=12
             users_picked.append(random_user)
             leave_out_indices.extend(item_indices[-leave_out:])
 
-        if len(users_picked) == n_users:
-            break
-
     if len(users_picked) < n_users:
-        error = 'Cannot pick ' + str(n_users) + ' users with more than ' + str(leave_out) + ' items'
-        solution = '\nTry a smaller test and/or validation percentage of the data'
+        error = 'Cannot pick ' + str(n_users) + ' users with ' + str(leave_out) + ' items'
+        solution = '\nTry a smaller test and/or validation percentage of the data or less items to leave out'
         raise ValueError(error + solution)
 
-    leave_out_set = full_data.loc[leave_out_indices]  # the last items of n_users users with n_item > leave_out
-    full_data_leave_one_out = full_data.drop(leave_out_indices)  # drops last items for n_users users
 
-    return full_data_leave_one_out.drop(columns=['index']), leave_out_set.drop(columns=['index'])
+    if seqs:
+        all_remaining, left_out = leave_users_out(full_data, users_picked)
+        remaining = left_out.drop(leave_out_indices)
+        left_out = left_out.loc[leave_out_indices]
+        if leave_out == 0:
+            return [all_remaining, left_out, remaining]
+        else:
+            return [all_remaining, remaining, left_out]
+
+    # drops last items for n_users users
+    leave_out_set = full_data.loc[leave_out_indices].drop(columns=['index'])  # the last items of n_users users with n_item > leave_out
+    full_data_leave_one_out = full_data.drop(leave_out_indices).drop(columns=['index'])
+
+    return [full_data_leave_one_out, leave_out_set]
 
 
-def train_val_test_split(df, batch_size, val_perc, test_perc, n_items, stats=True):
+def train_val_test_split(df, val_perc, test_perc, n_items_val, n_items_test, seqs=False, stats=True):
     """
     Create specific train, validation and test set for recommender systems
     :param df: pandas df containing user_id, item_id sorted on datetime per user (ascending)
-    :param batch_size: used in the LSTM
     :param val_perc: percentage of users to use for validation set
     :param test_perc: percentage of users to use for test set
-    :param n_items_val: number of items to leave out of df and put in the validation set per user
-    :param n_items_test: number of items to leave out of df and put in the test set per user
-    :param stats: print new datasets stats
-    :return: total users and total items from df, train set, validation set and test set
+    :param n_last_items: number of items to leave out of df and put in validation and test set per user
+    :param seqs:
+    :param stats:
+    :return:
     """
-    df['item_id'] = df.item.astype('category').cat.codes
-    df['user_id'] = df.user.astype('category').cat.codes
-
     total_users = len(df.user_id.unique())  # Need all users for BPR
-    total_items = len(df.item_id.unique())  # Need all items for CFRNN
 
-    users_to_remove = len(df.user_id.unique()) % batch_size  # Batch size compatible for CFRNN
-    df_new, deleted_users = leave_users_out(df, users_to_remove)
+    test_users = int(test_perc * total_users)  # Number of users to be used for testing
+    val_users = int(val_perc * total_users)
 
-    test_users = int(test_perc * total_users / batch_size + 1) * batch_size  # Number of users to be used for testing
-    test_last_items = n_items  # Items to be removed from test users in train set and used in test set
+    train_test = leave_last_x_out(df, test_users, n_items_test, seqs=seqs)
+    test_users_list = train_test[1].user_id.unique()
+    train_val = leave_last_x_out(train_test[0], val_users, n_items_val, already_picked=test_users_list, seqs=seqs)
 
-    val_users = int(val_perc * total_users / batch_size + 1) * batch_size
-    val_last_items = n_items
+    # if stats:
+    #     print('Total users:', total_users)
+    #     print('Number of train users:', len(train_set.user_id.unique()))
+    #     print('Number of test users:', test_users)
+    #     print('Number of validation users:', val_users, '\n')
 
-    train_set, test_set = leave_last_x_out(df_new, test_users, test_last_items)
-    test_users_list = test_set.user_id.unique()
-    train_set, val_set = leave_last_x_out(train_set, val_users, val_last_items, already_picked=test_users_list)
+    return [*train_val, *train_test[1:]]
 
-    if stats:
-        print('Total number of items:', total_items)
-        print('Total users:', total_users)
-        print('Number of train users:', len(train_set.user_id.unique()))
-        print('Number of test users:', test_users)
-        print('Number of validation users:', val_users, '\n')
-        print('Users deleted:', len(deleted_users.user_id.unique()))
 
-    return total_users, total_items, train_set, val_set, test_set
-
+# def train_val_test_split(df, batch_size, val_perc, test_perc, n_items, stats=True):
+#     """
+#     Create specific train, validation and test set for recommender systems
+#     :param df: pandas df containing user_id, item_id sorted on datetime per user (ascending)
+#     :param batch_size: used in the LSTM
+#     :param val_perc: percentage of users to use for validation set
+#     :param test_perc: percentage of users to use for test set
+#     :param n_items_val: number of items to leave out of df and put in the validation set per user
+#     :param n_items_test: number of items to leave out of df and put in the test set per user
+#     :param stats: print new datasets stats
+#     :return: total users and total items from df, train set, validation set and test set
+#     """
+#     total_users = len(df.user_id.unique())  # Need all users for BPR
+#     total_items = len(df.item_id.unique())  # Need all items for CFRNN
+#
+#     # users_to_remove = len(df.user_id.unique()) % batch_size  # Batch size compatible for CFRNN
+#     # df_new, deleted_users = leave_users_out(df, users_to_remove)
+#
+#     test_users = int(test_perc * total_users / batch_size + 1) * batch_size  # Number of users to be used for testing
+#     test_last_items = n_items  # Items to be removed from test users in train set and used in test set
+#
+#     val_users = int(val_perc * total_users / batch_size + 1) * batch_size
+#     val_last_items = n_items
+#
+#     train_set, test_set = leave_last_x_out(df_new, test_users, test_last_items)
+#     test_users_list = test_set.user_id.unique()
+#     train_set, val_set = leave_last_x_out(train_set, val_users, val_last_items, already_picked=test_users_list)
+#
+#     if stats:
+#         print('Total number of items:', total_items)
+#         print('Total users:', total_users)
+#         print('Number of train users:', len(train_set.user_id.unique()))
+#         print('Number of test users:', test_users)
+#         print('Number of validation users:', val_users, '\n')
+#         print('Users deleted:', len(deleted_users.user_id.unique()))
+#
+#     return total_users, total_items, train_set, val_set, test_set
 
 def get_x_y_sequences(dataset, shift=1, stats=True):
     """

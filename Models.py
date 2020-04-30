@@ -211,11 +211,12 @@ class BPR():
         df_results.to_pickle(log_path + res_name)
 
 
+######################################## LSTM ###########################################
 
-#LSTM Architecture
+#Architecture
 def build_LSTM_model(total_items, embedding_dim, mask_value, rnn_units, batch_size, return_sequences=True):
     model = tf.keras.Sequential([
-        tf.keras.layers.Embedding(total_items + 1,
+        tf.keras.layers.Embedding(total_items + 1, #+1 if masking value is total_items
                                   embedding_dim,
                                   batch_input_shape=[batch_size, None]),
 
@@ -230,4 +231,43 @@ def build_LSTM_model(total_items, embedding_dim, mask_value, rnn_units, batch_si
     ])
     return model
 
+#Storage
+def update_results(model_dict, final_results):
+    print('Adding to existing DataFrame')
+    final_results['epochs'] = model_dict['epochs']
+    final_results['train_time'] += model_dict['train_time']
+    train_values = ['recall', 'val_recall', 'loss', 'val_loss']
+    for train_value in train_values:
+        final_results[train_value].extend(model_dict[train_value])
+
+    return final_results
+
+
+def store_LSTM_model(path, params, history, train_time, eval_metrics=[], store=True):
+    total_recall = 0
+    if len(eval_metrics) > 0:
+        total_recall = eval_metrics['recall'].sum()
+
+    final_results = {**params, **history,
+                     'train_time': train_time,
+                     'epochs': len(history['loss']),
+                     'test_recall':total_recall}
+
+    if os.path.exists(path):
+        all_models = pd.read_pickle(path)
+        if final_results['model_id'] in set(all_models['model_id']):
+            model_index = 0
+            if len(all_models) > 1:
+                model_index = all_models[all_models['model_id'] == final_results['model_id']].index[0]
+            new_final_results = update_results(all_models.iloc[model_index].to_dict(), final_results)
+            all_models = all_models.drop(model_index).append(new_final_results, ignore_index=True)
+        else:
+            all_models = all_models.append(final_results, ignore_index=True)
+    else:
+        all_models = pd.DataFrame(columns=final_results.keys())
+        all_models = all_models.append(final_results, ignore_index=True)
+
+    if store:
+        all_models.to_pickle(path)
+    return all_models
 
