@@ -67,7 +67,7 @@ def leave_last_x_out(full_data, n_users, leave_out=1, already_picked=[], seed=12
     return full_data_leave_one_out.drop(columns=['index']), leave_out_set.drop(columns=['index'])
 
 
-def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_items_test, stats=True):
+def train_val_test_split(df, batch_size, val_perc, test_perc, n_items, stats=True):
     """
     Create specific train, validation and test set for recommender systems
     :param df: pandas df containing user_id, item_id sorted on datetime per user (ascending)
@@ -89,10 +89,10 @@ def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_ite
     df_new, deleted_users = leave_users_out(df, users_to_remove)
 
     test_users = int(test_perc * total_users / batch_size + 1) * batch_size  # Number of users to be used for testing
-    test_last_items = n_items_test  # Items to be removed from test users in train set and used in test set
+    test_last_items = n_items  # Items to be removed from test users in train set and used in test set
 
     val_users = int(val_perc * total_users / batch_size + 1) * batch_size
-    val_last_items = n_items_val
+    val_last_items = n_items
 
     train_set, test_set = leave_last_x_out(df_new, test_users, test_last_items)
     test_users_list = test_set.user_id.unique()
@@ -109,7 +109,7 @@ def train_val_test_split(df, batch_size, val_perc, test_perc, n_items_val, n_ite
     return total_users, total_items, train_set, val_set, test_set
 
 
-def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
+def get_x_y_sequences(dataset, shift=1, stats=True):
     """
 
     :param dataset: pandas df containing user_id, item_id sorted on datetime per user (ascending)
@@ -122,11 +122,8 @@ def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
     user_sequences_x = []
     user_sequences_y = []
     lengths = []
-    
-    if ordered:
-        users = list(dataset.groupby('user_id')['item_id'].count().sort_values().index) #ordered, shortest first
-    else:
-        users = dataset.user_id.unique()
+
+    users = dataset.user_id.unique()
 
     for u in users:
         user_item_seq = np.array(dataset[dataset['user_id'] == u]['item_id'])
@@ -141,44 +138,8 @@ def get_x_y_sequences(dataset, shift=1, ordered=True, stats=True):
               '\nAvg sequence length x:', np.average(lengths),
               '\nStd_dev sequence length x:', np.round(np.std(lengths), 2),
               '\nMedian of sequence length x:', median)
-    
-    if ordered: 
-        return user_sequences_x, user_sequences_y, users
-    else:
-        return user_sequences_x, user_sequences_y, median
 
-
-def min_padding(sequences, batch_size, min_len, max_len):
-    """
-    Given a list of sequences sorted on length, this function creates batches where each batch is padded (post)
-    until the length of the longest sequence in the batch. sequences < min_len will be excluded and > max_len
-    will be truncated (pre), NOTE: Batch_Generator needed for use in training of Keras model (see Helpers.py)
-    :param sequences: list of sequences ordered by sequence length per user
-    :param batch_size: number of sequences per batch
-    :param min_len: minimum sequence length for it to be put in a batch
-    :param max_len: maximum sequence length to be truncated
-    :return: list of padded_sequences as numpy arrays
-    """
-    padded_sequences = []
-    batch = []
-    max_batch_seq_len = 0
-    for i, seq in enumerate(sequences):
-        if len(seq) > min_len:
-            batch.append(seq)
-            if max_batch_seq_len > max_len:
-                max_batch_seq_len = max_len
-
-            elif max_batch_seq_len < len(seq):
-                max_batch_seq_len = len(seq)
-
-            if (i + 1) % batch_size == 0:
-                padded_sequences.append(
-                    tf.keras.preprocessing.sequence.pad_sequences(
-                        batch, maxlen=int(max_batch_seq_len), padding='post', truncating='pre'))
-                max_batch_seq_len = 0
-                batch = []
-
-    return padded_sequences
+    return user_sequences_x, user_sequences_y, median
 
 
 def standard_padding(sequences, max_length, pad_value=0.0, stats=True):
@@ -197,3 +158,58 @@ def standard_padding(sequences, max_length, pad_value=0.0, stats=True):
               '\nstd_dev sequence length:', np.std([i.shape[0] for i in padded_sequences]))
         
     return tf.data.Dataset.from_tensor_slices(padded_sequences)
+
+
+def create_seq_batch_dataset(df, shift, max_seq_len, pad_value, batch_size, stats=True, drop_remainder=True):
+    """
+
+    :param df:
+    :param shift:
+    :param max_seq_len:
+    :param pad_value:
+    :param batch_size:
+    :param drop_remainder:
+    :return:
+    """
+    user_sequences_x, user_sequences_y, median = get_x_y_sequences(df, shift, stats=stats)
+    sequences_data_x = standard_padding(user_sequences_x, max_seq_len, pad_value=pad_value, stats=stats)
+    sequences_data_y = standard_padding(user_sequences_y, max_seq_len, pad_value=pad_value, stats=stats)
+
+    dataset = tf.data.Dataset.zip((sequences_data_x, sequences_data_y))
+    dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
+
+    return dataset
+
+
+############################################# NOT NEEDED ANYMORE ######################################################
+# def min_padding(sequences, batch_size, min_len, max_len):
+#     """
+#     Given a list of sequences sorted on length, this function creates batches where each batch is padded (post)
+#     until the length of the longest sequence in the batch. sequences < min_len will be excluded and > max_len
+#     will be truncated (pre), NOTE: Batch_Generator needed for use in training of Keras model (see Helpers.py)
+#     :param sequences: list of sequences ordered by sequence length per user
+#     :param batch_size: number of sequences per batch
+#     :param min_len: minimum sequence length for it to be put in a batch
+#     :param max_len: maximum sequence length to be truncated
+#     :return: list of padded_sequences as numpy arrays
+#     """
+#     padded_sequences = []
+#     batch = []
+#     max_batch_seq_len = 0
+#     for i, seq in enumerate(sequences):
+#         if len(seq) > min_len:
+#             batch.append(seq)
+#             if max_batch_seq_len > max_len:
+#                 max_batch_seq_len = max_len
+#
+#             elif max_batch_seq_len < len(seq):
+#                 max_batch_seq_len = len(seq)
+#
+#             if (i + 1) % batch_size == 0:
+#                 padded_sequences.append(
+#                     tf.keras.preprocessing.sequence.pad_sequences(
+#                         batch, maxlen=int(max_batch_seq_len), padding='post', truncating='pre'))
+#                 max_batch_seq_len = 0
+#                 batch = []
+#
+#     return padded_sequences

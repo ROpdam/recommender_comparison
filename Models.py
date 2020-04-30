@@ -213,7 +213,7 @@ class BPR():
 
 
 #LSTM Architecture
-def build_model(total_items, embedding_dim, mask_value, rnn_units, batch_size, return_sequences=True):
+def build_LSTM_model(total_items, embedding_dim, mask_value, rnn_units, batch_size, return_sequences=True):
     model = tf.keras.Sequential([
         tf.keras.layers.Embedding(total_items + 1,
                                   embedding_dim,

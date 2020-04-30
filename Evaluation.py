@@ -120,19 +120,20 @@ def get_metrics(ranked_df, steps, max_rank, stats=True):
 
     return metrics
 
-
-def recall(y_true, y_pred):
+def recall_metric(total_items):
     """
 
-    :param y_true:
-    :param y_pred:
+    :param labels:
+    :param logits:
     :return:
     """
-    y_true = K.one_hot(tf.dtypes.cast(y_true, tf.int32), total_items)
-    y_true = K.ones_like(y_true)
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-    recall = true_positives / (possible_positives + K.epsilon())
+    def recall(labels, logits):
+        labels = K.one_hot(tf.dtypes.cast(labels, tf.int32), total_items)
+        labels = K.ones_like(labels)
+        true_positives = K.sum(K.round(K.clip(labels * logits, 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(labels, 0, 1)))
+        r = true_positives / (possible_positives + K.epsilon())
+        return r
     return recall
 
 
@@ -157,7 +158,7 @@ def create_diversity_bias(train_set, total_items, delta):
     return diversity_biases
 
 
-def db_loss(db, total_items):
+def diversity_bias_loss(db, total_items):
     """
     Calculates Categorical Cross Entropy Loss divided by the diversity bias as defined in Paper 1
     :param db: precalculated diversity bias per item_id

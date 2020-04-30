@@ -1,5 +1,14 @@
 import tensorflow as tf
 import numpy as np
+from time import time
+
+class TimingCallback(tf.keras.callbacks.Callback):
+  def __init__(self):
+    self.logs=[]
+  def on_epoch_begin(self,epoch, logs={}):
+    self.starttime=time()
+  def on_epoch_end(self, epoch, logs={}):
+    self.logs.append(time()-self.starttime)
 
 class Batch_Generator(tf.keras.utils.Sequence):
     'Generates data for Keras'
