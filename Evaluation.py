@@ -2,6 +2,10 @@ import time
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+K = tf.keras.backend
+
+# Papers used:
+# 1. Devooght, Robin, and Hugues Bersini. "Collaborative filtering with recurrent neural networks." arXiv preprint arXiv:1608.07400 (2016).
 
 
 def get_predictions(model, train_set, test_set, rank_at, temp=1):
@@ -115,3 +119,67 @@ def get_metrics(ranked_df, steps, max_rank, stats=True):
         print('Obtaining metrics time:', round(time.time() - s, 2))
 
     return metrics
+
+
+def recall(y_true, y_pred):
+    """
+
+    :param y_true:
+    :param y_pred:
+    :return:
+    """
+    y_true = K.one_hot(tf.dtypes.cast(y_true, tf.int32), total_items)
+    y_true = K.ones_like(y_true)
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+
+def create_diversity_bias(train_set, total_items, delta):
+    """
+    Pre-calculates the diversity bias needed in
+    :param train_set:
+    :param total_items:
+    :param delta:
+    :return:
+    """
+    item_id_bins = np.zeros((1,total_items), np.float32)
+    item_counts = train_set.groupby('item_id')['user_id'].count().sort_values(ascending=False)
+    bins = np.logspace(np.log10(item_counts.max()), np.log10(1), 11)
+    item_counts.index, np.digitize([item_counts],bins)
+
+    for item_id, count  in zip(item_counts.index, list(item_counts)):
+        item_bin = np.digitize([count],bins)
+        item_id_bins[0,item_id] = item_bin
+
+    diversity_biases = tf.Variable(np.exp(item_id_bins[0] * -delta))
+    return diversity_biases
+
+
+def db_loss(db, total_items):
+    """
+    Calculates Categorical Cross Entropy Loss divided by the diversity bias as defined in Paper 1
+    :param db: precalculated diversity bias per item_id
+    :return: categorical cross entropy loss function adjusted by the diversity bias
+    """
+    def loss(labels, logits):
+        labels = tf.dtypes.cast(labels, tf.int32)
+        oh_labels = K.one_hot(labels, total_items)
+        standard_loss = tf.keras.losses.categorical_crossentropy(oh_labels, logits, from_logits=True)
+        label_weights = tf.gather(db, labels, axis=0)
+        db_loss = tf.math.multiply(standard_loss, label_weights)
+        return db_loss
+    return loss
+
+
+def cce_loss(total_items):
+    """
+    Calculates Categorical Crossentropy Loss over the one hot encoded labels with the logits
+    :param total_items: Maximum item_id for one hot encoding
+    :return: categorical cross entropy loss function
+    """
+    def loss(labels, logits):
+        oh_labels = K.one_hot(tf.dtypes.cast(labels, tf.int32), total_items)
+        return tf.keras.losses.categorical_crossentropy(oh_labels, logits, from_logits=True)
+    return loss

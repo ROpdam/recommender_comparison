@@ -5,6 +5,7 @@ import pandas as pd
 import random
 import os
 from sklearn.metrics import roc_auc_score
+import tensorflow as tf
 
 class BPR():
     """
@@ -208,3 +209,25 @@ class BPR():
 
         df_results = df_results.append(final_log, ignore_index=True)
         df_results.to_pickle(log_path + res_name)
+
+
+
+#LSTM Architecture
+def build_model(total_items, embedding_dim, mask_value, rnn_units, batch_size, return_sequences=True):
+    model = tf.keras.Sequential([
+        tf.keras.layers.Embedding(total_items + 1,
+                                  embedding_dim,
+                                  batch_input_shape=[batch_size, None]),
+
+        tf.keras.layers.Masking(mask_value=mask_value),
+
+        tf.keras.layers.LSTM(units=rnn_units,
+                             return_sequences=return_sequences,
+                             stateful=False,  # Reset cell states with each batch
+                             recurrent_initializer='glorot_uniform'),
+
+        tf.keras.layers.Dense(total_items)
+    ])
+    return model
+
+
