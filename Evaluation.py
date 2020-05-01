@@ -8,38 +8,37 @@ K = tf.keras.backend
 # 1. Devooght, Robin, and Hugues Bersini. "Collaborative filtering with recurrent neural networks." arXiv preprint arXiv:1608.07400 (2016).
 
 
-def get_predictions(model, train_set, test_set, rank_at, temp=1):
+def get_predictions(model, test_set, test_left_out_items, rank_at):
     """
-    Uses a Keras model with batch size set to 1 to predict the rest of the sequences from the train_set per user
-    finally puts user, a list pred_items_ranked and a list containing true_ids from the test set
+    Uses a Keras model with batch size set to 1 to predict the rest of the sequences from the train_set per user.
+    Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
+    from the test_set
     :param model: Keras RNN model with batch size set to 1
-    :param train_set: pandas df containing user_id, item_id sorted on datetime per user
-    :param test_set: pandas df containing: user_id, last item_id(s) per user
+    :param test_set: pandas df containing: user_id, last item_id(s) per user, without their last (chron) item
+    :param test_left_out_items: pandas df of the last (chron) item of every user in test_test
     :param rank_at: maximum of top ranked items per user
     :param temp: temperature, 1 means no deviation from model prediction
     :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
              true_id extracted from test_set
     """
-    predictions_df = pd.DataFrame(columns=['user', 'pred_items_ranked', 'true_id'])
-    for u in test_set.user_id.unique():
-        test_user_seq = np.array(train_set[train_set['user_id'] == u]['item_id'])
-        true_items = list(test_set[test_set['user_id'] == u]['item_id'])
-        generated_predictions = []
+    user_sequences = test_set.groupby('user_id')['item_id'].apply(list)
+    user_true_items = test_left_out_items.groupby('user_id')['item_id'].apply(list)
+    all_predictions = []
+    all_true_items = []
 
-        # Predict
-        for item in range(rank_at):  # could be any number of recommended items you want to predict
-            predictions = model(test_user_seq.reshape(-1, 1).T)
-            predictions = tf.squeeze(predictions, 0)
+    for user, true_items in user_true_items.items():
+        predictions = []
+        user_seq = user_sequences[user]
+        for i in range(rank_at):
+            pred_item_id = model.predict_classes(np.array([user_seq,]), batch_size=1)[0]
+            user_seq.append(pred_item_id)
+            predictions.append(pred_item_id)
 
-            predictions = predictions / temp
-            predicted_id = tf.random.categorical(predictions, num_samples=1)[-1, 0].numpy()
-            test_user_seq = np.append(test_user_seq, predicted_id).reshape(-1, 1).transpose()
+        all_true_items.append(true_items)
+        all_predictions.append(predictions)
 
-            #         half_test_seq = tf.expand_dims([predicted_id], 0)
-            generated_predictions.append(predicted_id)
-
-        predictions_df = predictions_df.append(
-            {'user': u, 'pred_items_ranked': generated_predictions, 'true_id': true_items}, ignore_index=True)
+    predictions_df = pd.DataFrame(list(zip(user_sequences.index, all_predictions, all_true_items)),
+                              columns=['user', 'pred_items_ranked', 'true_id'])
 
     return predictions_df
 
