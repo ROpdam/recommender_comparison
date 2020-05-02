@@ -23,10 +23,13 @@ def get_predictions(model, test_set, test_left_out_items, rank_at):
     """
     user_sequences = test_set.groupby('user_id')['item_id'].apply(list)
     user_true_items = test_left_out_items.groupby('user_id')['item_id'].apply(list)
+    users = user_true_items.index
     all_predictions = []
     all_true_items = []
+    from progressbar import progressbar
+    pBar = progressbar.ProgressBar()
 
-    for user, true_items in user_true_items.items():
+    for user in users:#pBar(users):
         predictions = []
         user_seq = user_sequences[user]
         for i in range(rank_at):
@@ -34,7 +37,7 @@ def get_predictions(model, test_set, test_left_out_items, rank_at):
             user_seq.append(pred_item_id)
             predictions.append(pred_item_id)
 
-        all_true_items.append(true_items)
+        all_true_items.append(user_true_items[user])
         all_predictions.append(predictions)
 
     predictions_df = pd.DataFrame(list(zip(user_sequences.index, all_predictions, all_true_items)),
