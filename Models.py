@@ -215,6 +215,16 @@ class BPR():
 
 #Architecture
 def build_LSTM_model(total_items, embedding_dim, mask_value, rnn_units, batch_size, return_sequences=True):
+    """
+    Building the LSTM model in Keras
+    :param total_items: Number of items from the full df
+    :param embedding_dim: Number of embedding dimensions (100)
+    :param mask_value: Value used for Masking, NOTE: total_items is used for padding and masking so embedding +1
+    :param rnn_units: Number of hidden units
+    :param batch_size: batch_size
+    :param return_sequences: True when training, False when predicitng next item
+    :return: model of type tf.keras.model
+    """
     model = tf.keras.Sequential([
         tf.keras.layers.Embedding(total_items + 1, #+1 if masking value is total_items
                                   embedding_dim,
@@ -233,6 +243,14 @@ def build_LSTM_model(total_items, embedding_dim, mask_value, rnn_units, batch_si
 
 #Storage
 def update_results(model_dict, final_results):
+    """
+    If the model was already present in the all_models dataframe in store_LSTM_model, this function will change
+    the number of epochs, add the train_time and append the training history of the model_dict model provided by
+    store_LSTM_model
+    :param model_dict: all stats from a model as a dict
+    :param final_results: the new stats of the same model to update model_dict with
+    :return: Updated final_results with model_dict
+    """
     print('Adding to existing DataFrame')
     final_results['epochs'] = model_dict['epochs']
     final_results['train_time'] += model_dict['train_time']
@@ -244,6 +262,19 @@ def update_results(model_dict, final_results):
 
 
 def store_LSTM_model(path, params, history, train_time, eval_metrics=[], store=True):
+    """
+    Storing the trained and/or tested LSTM model in:
+    1. An existing pandas dataframe if it already exists in path
+    2. A new pandas dataframe
+    :param path: Where to store / add this dataframe with the existing model
+    :param params: Parameters used for the model
+    :param history: Training History of the model
+    :param train_time: Elapsed train time of the model
+    :param eval_metrics: Prediction Metrics
+    :param store: Whether to actually store the df or return the df
+    :return: all_models dataframe which keeps track of:
+    TODO: Fill in list of columns from all_models
+    """
     total_recall = 0
     if len(eval_metrics) > 0:
         total_recall = eval_metrics['recall'].sum()
