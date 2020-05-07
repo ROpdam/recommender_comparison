@@ -5,6 +5,7 @@ import pandas as pd
 import random
 import os
 from sklearn.metrics import roc_auc_score
+import progressbar
 import tensorflow as tf
 
 class BPR():
@@ -302,3 +303,78 @@ def store_LSTM_model(path, params, history, train_time, eval_metrics=[], store=T
         all_models.to_pickle(path)
     return all_models
 
+######################################## NeuMF ###########################################
+
+######################################## GMF
+def build_GMF_model(total_items, total_users, nolf, regs=[0, 0]):
+    user_input = tf.keras.Input(shape=(1,), dtype='int32', name='user_input')
+    item_input = tf.keras.Input(shape=(1,), dtype='int32', name='item_input')
+
+    user_embedding = tf.keras.layers.Embedding(input_dim=total_users,
+                                               output_dim=nolf,
+                                               name='user_latent_factors',
+                                               embeddings_initializer=tf.keras.initializers.RandomNormal(mean=0.0,
+                                                                                                         stddev=0.01,
+                                                                                                         seed=1234),
+                                               embeddings_regularizer=tf.keras.regularizers.l2(regs[0]),
+                                               input_length=1)
+
+    item_embedding = tf.keras.layers.Embedding(input_dim=total_items,
+                                               output_dim=nolf,
+                                               name='item_latent_factors',
+                                               embeddings_initializer=tf.keras.initializers.RandomNormal(mean=0.0,
+                                                                                                         stddev=0.01,
+                                                                                                         seed=1234),
+                                               embeddings_regularizer=tf.keras.regularizers.l2(regs[1]),
+                                               input_length=1)
+
+    user_latent_f = tf.keras.layers.Flatten()(user_embedding(user_input))
+    item_latent_f = tf.keras.layers.Flatten()(item_embedding(item_input))
+
+    predict_vector = tf.keras.layers.Multiply()([user_latent_f, item_latent_f])
+
+    final_predictions = tf.keras.layers.Dense(units=1,
+                                              activation='sigmoid',
+                                              kernel_initializer='lecun_uniform',
+                                              name='final_preds')(predict_vector)
+
+    model = tf.keras.Model(inputs=[user_input, item_input],
+                           outputs=[final_predictions])
+
+    return model
+
+
+def create_GMF_samples(data, epochs, sample_size, n_user_neg_samples=1):
+    all_user_inputs, all_item_inputs, all_labels = [], [], []
+    user_items = data.groupby('user_id')['item_id'].apply(list)
+    train_users = data.user_id.unique()
+    train_items = data.item_id.unique()
+
+    pbar = progressbar.ProgressBar()
+    for n in pbar(range(epochs)):
+        user_inputs, item_inputs, labels = [], [], []
+        for s in range(int(sample_size)):
+            # Add positive item
+            u = np.random.choice(train_users)
+            u_items = user_items[u]
+            i = np.random.choice(u_items)
+
+            user_inputs.append(u)
+            item_inputs.append(i)
+            labels.append(1)
+
+            # Add negative item
+            for i in range(n_user_neg_samples):
+                j = np.random.choice(train_items)
+                while j in u_items:  # neg item j cannot be in the set of pos items of user u
+                    j = np.random.choice(train_items)
+
+                user_inputs.append(u)
+                item_inputs.append(j)
+                labels.append(0)
+
+        all_user_inputs.append(user_inputs)
+        all_item_inputs.append(item_inputs)
+        all_labels.append(labels)
+
+    return [all_user_inputs, all_item_inputs, all_labels]

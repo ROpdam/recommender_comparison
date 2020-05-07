@@ -183,6 +183,29 @@ def create_seq_batch_dataset(df, shift, max_seq_len, pad_value, batch_size, stat
     return dataset
 
 
+def split_df_by_users(df, left_out_items, n_splits):
+    user_list = df.user_id.unique()
+    data_size = len(user_list) / n_splits
+    leftovers = 0
+
+    if data_size - int(data_size) > 0:
+        leftovers = n_splits * (data_size - int(data_size)) - 1
+
+    split = [n for n in range(0, len(user_list), int(data_size))]
+    split[-1] = split[-1] + int(leftovers)
+    data_split = [user_list[split[n]:split[n + 1]] for n in range(len(split) - 1)]
+
+    df_splits = []
+    left_out_items_split = []
+    for users_split in data_split:
+        _, df_subset = leave_users_out(df, list(users_split))
+        _, subset = leave_users_out(left_out_items, list(users_split))
+
+        df_splits.append(df_subset)
+        left_out_items_split.append(subset)
+
+    return df_splits, left_out_items_split
+
 ############################################# NOT NEEDED ANYMORE ######################################################
 # def min_padding(sequences, batch_size, min_len, max_len):
 #     """
