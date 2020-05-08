@@ -306,7 +306,7 @@ def store_LSTM_model(path, params, history, train_time, eval_metrics=[], store=T
 ######################################## NeuMF ###########################################
 
 ######################################## GMF
-def build_GMF_model(total_items, total_users, nolf, regs=[0, 0]):
+def build_GMF_model(total_items, total_users, nolf, regs=[0, 0], seed=1234):
     user_input = tf.keras.Input(shape=(1,), dtype='int32', name='user_input')
     item_input = tf.keras.Input(shape=(1,), dtype='int32', name='item_input')
 
@@ -315,7 +315,7 @@ def build_GMF_model(total_items, total_users, nolf, regs=[0, 0]):
                                                name='user_latent_factors',
                                                embeddings_initializer=tf.keras.initializers.RandomNormal(mean=0.0,
                                                                                                          stddev=0.01,
-                                                                                                         seed=1234),
+                                                                                                         seed=seed),
                                                embeddings_regularizer=tf.keras.regularizers.l2(regs[0]),
                                                input_length=1)
 
@@ -324,7 +324,7 @@ def build_GMF_model(total_items, total_users, nolf, regs=[0, 0]):
                                                name='item_latent_factors',
                                                embeddings_initializer=tf.keras.initializers.RandomNormal(mean=0.0,
                                                                                                          stddev=0.01,
-                                                                                                         seed=1234),
+                                                                                                         seed=seed),
                                                embeddings_regularizer=tf.keras.regularizers.l2(regs[1]),
                                                input_length=1)
 

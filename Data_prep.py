@@ -144,11 +144,12 @@ def get_x_y_sequences(dataset, shift=1, stats=True):
     return user_sequences_x, user_sequences_y, median
 
 
-def standard_padding(sequences, max_length, pad_value=0.0, stats=True):
+def standard_padding(sequences, max_length, pad_value=0.0, eval=False, stats=True):
     """
     Pads (post) sequences up until max_length with zeros
     :param sequences: list of sequences per user
     :param max_length: maximum length to pad sequences to
+    :param eval: whether the padded sequences will be used for evaluation (in get_predictions)
     :param stats: print number of sequences, acg sequence length, st_dev of sequence length
     :return: tensorflow dataset consisting of the padded sequences
     """
@@ -158,8 +159,12 @@ def standard_padding(sequences, max_length, pad_value=0.0, stats=True):
         print('number of sequences:', padded_sequences.shape[0], 
               '\navg sequence length:', np.average([i.shape[0] for i in padded_sequences]),
               '\nstd_dev sequence length:', np.std([i.shape[0] for i in padded_sequences]))
-        
+
+    if eval:
+        return padded_sequences
+
     return tf.data.Dataset.from_tensor_slices(padded_sequences)
+
 
 
 def create_seq_batch_dataset(df, shift, max_seq_len, pad_value, batch_size, stats=True, drop_remainder=True):
