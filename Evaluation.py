@@ -2,7 +2,7 @@ import time
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from Data_prep import standard_padding
+from Data_prep import standard_padding, get_x_y_sequences
 K = tf.keras.backend
 
 # Papers used:
@@ -10,7 +10,7 @@ K = tf.keras.backend
 
 def get_predictions(model, data, left_out, batch_size, max_seq_len, pad_value, rank_at):
     """
-    Uses a Keras model with batch size set to number of test users to predict the rest of the sequences from the data per user.
+    Uses a Keras model with batch size set to None to predict the rest of the sequences from the data per user.
     Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
     from the left_out df
     :param model: Keras RNN model with batch size set to batch_size (batch_size==number of test users)
@@ -23,36 +23,96 @@ def get_predictions(model, data, left_out, batch_size, max_seq_len, pad_value, r
     :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
              true_id extracted from test_set (as input for Evaluation.get_metrics
     """
-    user_sequences_series = data.groupby('user_id')['item_id'].apply(list)
-    left_out_items = left_out.groupby('user_id')['item_id'].apply(list)
+    n_batches = int(len(left_out) / batch_size)
+    data_sequences, _, _ = get_x_y_sequences(data, stats=False)
+    data_seqs_padded = standard_padding(data_sequences, max_seq_len, pad_value, eval=True, stats=False)
+    data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
 
-    list_sequences = []
-    true_ids = []
-    for i, user_sequence in enumerate(user_sequences_series):
-        list_sequences.append(user_sequence)
-        true_ids.append(left_out_items.iloc[i])
+    # Extend final predictions with predictions made on batches
+    final_preds = []
+    for split in data_seqs_splits:
+        final_preds.extend(make_predictions(model, split, pad_value, rank_at))
 
-    user_sequences = standard_padding(list_sequences, max_seq_len, pad_value=pad_value, eval=True, stats=False)
-    final_preds = np.zeros((user_sequences.shape[0], rank_at))
+    # Get True items
+    test_left_out_items = left_out.groupby('user_id')['item_id'].apply(list)
+
+    preds_df = pd.DataFrame(list(zip(test_left_out_items.index, final_preds, list(test_left_out_items))),
+                            columns=['user', 'pred_items_ranked', 'true_id'])
+
+    return preds_df
+
+
+def make_predictions(model, user_sequences, rank_at):
+    """
+
+    :param model:
+    :param user_sequences:
+    :param rank_at:
+    :return:
+    """
+    final_preds = np.zeros((user_sequences.shape[0], pad_value, rank_at))
 
     for i in range(rank_at):
-        predictions = model.predict(user_sequences, batch_size=batch_size)
+        predictions = model.predict(user_sequences)
         for u_index, prediction in enumerate(predictions):
-            padding_values = np.where(user_sequences[u_index] == pad_value)[0]
             pred_item_id = np.argmax(prediction)
             final_preds[u_index][i] = pred_item_id
 
+            padding_values = np.where(user_sequences[u_index] == pad_value)[0]
             if padding_values.shape[0] > 0:
                 first_pad_value = np.min(padding_values)
                 user_sequences[u_index][first_pad_value] = pred_item_id
             else:
                 new_user_sequence = np.append(user_sequences[u_index], pred_item_id)[1:]
                 user_sequences[u_index] = new_user_sequence
+    return final_preds
 
-    predictions_df = pd.DataFrame(list(zip(user_sequences_series.index, final_preds, true_ids)),
-                                  columns=['user', 'pred_items_ranked', 'true_id'])
 
-    return predictions_df
+# def get_predictions(model, data, left_out, batch_size, max_seq_len, pad_value, rank_at):
+#     """
+#     Uses a Keras model with batch size set to number of test users to predict the rest of the sequences from the data per user.
+#     Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
+#     from the left_out df
+#     :param model: Keras RNN model with batch size set to batch_size (batch_size==number of test users)
+#     :param data: Test or Validation set (pandas)
+#     :param left_out: left out items (pandas)
+#     :param batch_size: batch_size==number of test users
+#     :param max_seq_len: Sequences will be padded to this value as this is also done while training
+#     :param pad_value: pad_value==total_items (as done while training)
+#     :param rank_at: maximum number of predictions to make
+#     :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+#              true_id extracted from test_set (as input for Evaluation.get_metrics
+#     """
+#     user_sequences_series = data.groupby('user_id')['item_id'].apply(list)
+#     left_out_items = left_out.groupby('user_id')['item_id'].apply(list)
+#
+#     list_sequences = []
+#     true_ids = []
+#     for i, user_sequence in enumerate(user_sequences_series):
+#         list_sequences.append(user_sequence)
+#         true_ids.append(left_out_items.iloc[i])
+#
+#     user_sequences = standard_padding(list_sequences, max_seq_len, pad_value=pad_value, eval=True, stats=False)
+#     final_preds = np.zeros((user_sequences.shape[0], rank_at))
+#
+#     for i in range(rank_at):
+#         predictions = model.predict(user_sequences, batch_size=batch_size)
+#         for u_index, prediction in enumerate(predictions):
+#             padding_values = np.where(user_sequences[u_index] == pad_value)[0]
+#             pred_item_id = np.argmax(prediction)
+#             final_preds[u_index][i] = pred_item_id
+#
+#             if padding_values.shape[0] > 0:
+#                 first_pad_value = np.min(padding_values)
+#                 user_sequences[u_index][first_pad_value] = pred_item_id
+#             else:
+#                 new_user_sequence = np.append(user_sequences[u_index], pred_item_id)[1:]
+#                 user_sequences[u_index] = new_user_sequence
+#
+#     predictions_df = pd.DataFrame(list(zip(user_sequences_series.index, final_preds, true_ids)),
+#                                   columns=['user', 'pred_items_ranked', 'true_id'])
+#
+#     return predictions_df
 
 
 def rank_predictions(model, test_set, rank_at, stats=True):
