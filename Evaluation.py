@@ -42,7 +42,7 @@ def get_predictions(model, data, left_out, batch_size, max_seq_len, pad_value, r
     return preds_df
 
 
-def make_predictions(model, user_sequences, rank_at):
+def make_predictions(model, user_sequences, pad_value, rank_at):
     """
 
     :param model:
@@ -50,7 +50,7 @@ def make_predictions(model, user_sequences, rank_at):
     :param rank_at:
     :return:
     """
-    final_preds = np.zeros((user_sequences.shape[0], pad_value, rank_at))
+    final_preds = np.zeros((user_sequences.shape[0], rank_at), dtype='int32')
 
     for i in range(rank_at):
         predictions = model.predict(user_sequences)
