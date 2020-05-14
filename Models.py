@@ -305,7 +305,6 @@ def store_LSTM_model(path, params, history, train_time, eval_metrics=[], store=T
 
 ######################################## NeuMF ###########################################
 
-######################################## GMF
 def build_GMF_model(total_items, total_users, nolf, regs=[0, 0], seed=1234):
     user_input = tf.keras.Input(shape=(1,), dtype='int32', name='user_input')
     item_input = tf.keras.Input(shape=(1,), dtype='int32', name='item_input')
@@ -336,15 +335,181 @@ def build_GMF_model(total_items, total_users, nolf, regs=[0, 0], seed=1234):
     final_predictions = tf.keras.layers.Dense(units=1,
                                               activation='sigmoid',
                                               kernel_initializer='lecun_uniform',
-                                              name='final_preds')(predict_vector)
+                                              name='prediction')(predict_vector)
 
     model = tf.keras.Model(inputs=[user_input, item_input],
                            outputs=[final_predictions])
+    model._name="GMF"
 
     return model
 
 
-def create_GMF_samples(data, epochs, sample_size, n_user_neg_samples=1):
+def build_MLP_model(total_items, total_users, layers=[20,10], reg_layers=[0,0], seed=1234):
+    # Total Layers
+    num_layers=len(layers)
+    
+    # Inputs
+    user_input = tf.keras.Input(shape=(1,), dtype='int32', name='user_input')
+    item_input = tf.keras.Input(shape=(1,), dtype='int32', name='item_input')
+
+    # First Layer
+    MLP_Embedding_User = tf.keras.layers.Embedding(input_dim=total_users, 
+                                   output_dim=int(layers[0]/2), 
+                                   name='user_latent_factors',
+                                   embeddings_initializer= tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.01, seed=seed), 
+                                   embeddings_regularizer=tf.keras.regularizers.l2(reg_layers[0]), 
+                                   input_length=1)
+    
+    MLP_Embedding_Item = tf.keras.layers.Embedding(input_dim=total_items, 
+                                   output_dim=int(layers[0]/2), 
+                                   name='item_latent_factors',
+                                   embeddings_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.01, seed=seed), 
+                                   embeddings_regularizer=tf.keras.regularizers.l2(reg_layers[0]), 
+                                   input_length=1)   
+    
+    user_latent_f = tf.keras.layers.Flatten()(MLP_Embedding_User(user_input))
+    item_latent_f = tf.keras.layers.Flatten()(MLP_Embedding_Item(item_input))
+
+    predict_vector = tf.keras.layers.Concatenate(axis=-1)([user_latent_f, item_latent_f])
+    
+    # Layers
+    for layer_id in range(1, num_layers):
+        layer = tf.keras.layers.Dense(layers[layer_id], 
+                      kernel_regularizer=tf.keras.regularizers.l2(reg_layers[layer_id]),  
+                      bias_regularizer=tf.keras.regularizers.l2(reg_layers[layer_id]), 
+                      activation='relu', 
+                      name=f'layer{layer_id}')
+        predict_vector = layer(predict_vector)
+        
+    # Final prediction layer
+    prediction = tf.keras.layers.Dense(1, 
+                       activation='sigmoid', 
+                       kernel_initializer='lecun_uniform', 
+                       bias_initializer ='lecun_uniform',   
+                       name='prediction')(predict_vector)
+    
+    model = tf.keras.Model(inputs=[user_input, item_input], 
+                  outputs=[prediction])
+    
+    return model
+
+
+def load_pretrain_model(model, gmf_model, mlp_model, num_layers, alpha=0.5):
+    # MF embeddings
+    gmf_user_embeddings = gmf_model.get_layer('user_latent_factors').get_weights()
+    gmf_item_embeddings = gmf_model.get_layer('item_latent_factors').get_weights()
+    model.get_layer('mf_embedding_user').set_weights(gmf_user_embeddings)
+    model.get_layer('mf_embedding_item').set_weights(gmf_item_embeddings)
+    
+    # MLP embeddings
+    mlp_user_embeddings = mlp_model.get_layer('user_latent_factors').get_weights()
+    mlp_item_embeddings = mlp_model.get_layer('item_latent_factors').get_weights()
+    model.get_layer('mlp_embedding_user').set_weights(mlp_user_embeddings)
+    model.get_layer('mlp_embedding_item').set_weights(mlp_item_embeddings)
+    
+    # MLP layers
+    for layer_id in range(1, num_layers):
+        mlp_layer_weights = mlp_model.get_layer(f'layer{layer_id}').get_weights()
+        model.get_layer(f'layer{layer_id}').set_weights(mlp_layer_weights)
+        
+    # Prediction weights
+    gmf_prediction = gmf_model.get_layer('prediction').get_weights()
+    mlp_prediction = mlp_model.get_layer('prediction').get_weights()
+    new_weights = np.concatenate((gmf_prediction[0], mlp_prediction[0]), axis=0)
+    new_b = gmf_prediction[1] + mlp_prediction[1]
+    
+    model.get_layer('prediction').set_weights([alpha*new_weights, (1-alpha)*new_b])    
+    
+    return model
+
+
+def build_NeuMF_model(total_users, total_items, mf_nolf=10, reg_mf=[0,0], layers=[10], reg_layers=[0]):
+    num_layer = len(layers)
+    
+    user_input = tf.keras.Input(shape=(1,), dtype='int32', name='user_input')
+    item_input = tf.keras.Input(shape=(1,), dtype='int32', name='item_input')
+    
+    MF_Embedding_User = tf.keras.layers.Embedding(input_dim=total_users,
+                                  output_dim=mf_nolf,
+                                  name='mf_embedding_user',
+                                  embeddings_initializer='normal',
+                                  embeddings_regularizer=tf.keras.regularizers.l2(reg_mf[0]),
+                                  input_length=1)
+    MF_Embedding_Item = tf.keras.layers.Embedding(input_dim=total_items,
+                                  output_dim=mf_nolf,
+                                  name='mf_embedding_item',
+                                  embeddings_initializer='normal',
+                                  embeddings_regularizer=tf.keras.regularizers.l2(reg_mf[1]),
+                                  input_length=1)
+    
+    MLP_Embedding_User = tf.keras.layers.Embedding(input_dim=total_users,
+                                                   output_dim=int(layers[0]/2),
+                                                   name='mlp_embedding_user',
+                                                   embeddings_initializer='normal',
+                                                   embeddings_regularizer=tf.keras.regularizers.l2(reg_layers[0]),
+                                                   input_length=1)
+    MLP_Embedding_Item = tf.keras.layers.Embedding(input_dim=total_items,
+                                                   output_dim=int(layers[0]/2),
+                                                   name='mlp_embedding_item',
+                                                   embeddings_initializer='normal',
+                                                   embeddings_regularizer=tf.keras.regularizers.l2(reg_layers[0]),
+                                                   input_length=1)
+    
+    mf_user_latent = tf.keras.layers.Flatten()(MF_Embedding_User(user_input))
+    mf_item_latent = tf.keras.layers.Flatten()(MF_Embedding_Item(item_input))
+    mf_vector = tf.keras.layers.Multiply()([mf_user_latent, mf_item_latent])
+    
+    mlp_user_latent = tf.keras.layers.Flatten()(MLP_Embedding_User(user_input))
+    mlp_item_latent = tf.keras.layers.Flatten()(MLP_Embedding_Item(item_input))
+    mlp_vector = tf.keras.layers.Concatenate(axis=-1)([mlp_user_latent, mlp_item_latent])
+    
+    for layer_id in range(1, num_layer):
+        layer = tf.keras.layers.Dense(units=layers[layer_id], 
+                                      kernel_regularizer=tf.keras.regularizers.l2(reg_layers[layer_id]), 
+                                      activation='relu', 
+                                      name=f'layer{layer_id}')
+        mlp_vector = layer(mlp_vector)
+    
+    predict_vector = tf.keras.layers.Concatenate(axis=-1)([mf_vector, mlp_vector])
+    prediction = tf.keras.layers.Dense(units=1, 
+                                       activation='sigmoid', 
+                                       kernel_initializer='lecun_uniform', 
+                                       name = "prediction")(predict_vector)
+    
+    model = tf.keras.Model(inputs=[user_input, item_input], 
+                  outputs=[prediction])
+
+    model._name = 'NeuMF'
+    
+    return model
+
+
+def neumf_train_loop(model, samples, params, callbacks, history={'loss':[]}):
+    print(f'\nFitting {model.name} with parameters:')
+    print('Parameters:', pd.DataFrame.from_dict(params, orient='index'))
+    
+    all_user_inputs, all_item_inputs, all_labels = samples
+    for epoch in range(params['epochs']):
+        print(f'Epoch: {epoch}')
+
+        user_inputs = all_user_inputs[epoch]
+        item_inputs = all_item_inputs[epoch]
+        labels = all_labels[epoch]
+
+        hist = model.fit([np.array(user_inputs), np.array(item_inputs)], 
+                  np.array(labels), 
+                  batch_size=params['batch_size'], 
+                  verbose=1, 
+                  epochs=1, 
+                  shuffle=True,
+                  callbacks=callbacks)
+
+        history['loss'].append(round(hist.history['loss'][0],5))
+    
+    return model, history
+
+
+def create_NeuMF_samples(data, epochs, sample_size, n_user_neg_samples=1):
     all_user_inputs, all_item_inputs, all_labels = [], [], []
     user_items = data.groupby('user_id')['item_id'].apply(list)
     train_users = data.user_id.unique()
