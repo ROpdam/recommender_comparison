@@ -304,7 +304,6 @@ def store_LSTM_model(path, params, history, train_time, eval_metrics=[], store=T
     return all_models
 
 ######################################## NeuMF ###########################################
-
 def build_GMF_model(total_items, total_users, nolf, regs=[0, 0], seed=1234):
     user_input = tf.keras.Input(shape=(1,), dtype='int32', name='user_input')
     item_input = tf.keras.Input(shape=(1,), dtype='int32', name='item_input')
@@ -394,35 +393,6 @@ def build_MLP_model(total_items, total_users, layers=[20,10], reg_layers=[0,0], 
     return model
 
 
-def load_pretrain_model(model, gmf_model, mlp_model, num_layers, alpha=0.5):
-    # MF embeddings
-    gmf_user_embeddings = gmf_model.get_layer('user_latent_factors').get_weights()
-    gmf_item_embeddings = gmf_model.get_layer('item_latent_factors').get_weights()
-    model.get_layer('mf_embedding_user').set_weights(gmf_user_embeddings)
-    model.get_layer('mf_embedding_item').set_weights(gmf_item_embeddings)
-    
-    # MLP embeddings
-    mlp_user_embeddings = mlp_model.get_layer('user_latent_factors').get_weights()
-    mlp_item_embeddings = mlp_model.get_layer('item_latent_factors').get_weights()
-    model.get_layer('mlp_embedding_user').set_weights(mlp_user_embeddings)
-    model.get_layer('mlp_embedding_item').set_weights(mlp_item_embeddings)
-    
-    # MLP layers
-    for layer_id in range(1, num_layers):
-        mlp_layer_weights = mlp_model.get_layer(f'layer{layer_id}').get_weights()
-        model.get_layer(f'layer{layer_id}').set_weights(mlp_layer_weights)
-        
-    # Prediction weights
-    gmf_prediction = gmf_model.get_layer('prediction').get_weights()
-    mlp_prediction = mlp_model.get_layer('prediction').get_weights()
-    new_weights = np.concatenate((gmf_prediction[0], mlp_prediction[0]), axis=0)
-    new_b = gmf_prediction[1] + mlp_prediction[1]
-    
-    model.get_layer('prediction').set_weights([alpha*new_weights, (1-alpha)*new_b])    
-    
-    return model
-
-
 def build_NeuMF_model(total_users, total_items, mf_nolf=10, reg_mf=[0,0], layers=[10], reg_layers=[0]):
     num_layer = len(layers)
     
@@ -480,6 +450,35 @@ def build_NeuMF_model(total_users, total_items, mf_nolf=10, reg_mf=[0,0], layers
                   outputs=[prediction])
 
     model._name = 'NeuMF'
+    
+    return model
+
+
+def load_pretrain_model(model, gmf_model, mlp_model, num_layers, alpha=0.5):
+    # MF embeddings
+    gmf_user_embeddings = gmf_model.get_layer('user_latent_factors').get_weights()
+    gmf_item_embeddings = gmf_model.get_layer('item_latent_factors').get_weights()
+    model.get_layer('mf_embedding_user').set_weights(gmf_user_embeddings)
+    model.get_layer('mf_embedding_item').set_weights(gmf_item_embeddings)
+    
+    # MLP embeddings
+    mlp_user_embeddings = mlp_model.get_layer('user_latent_factors').get_weights()
+    mlp_item_embeddings = mlp_model.get_layer('item_latent_factors').get_weights()
+    model.get_layer('mlp_embedding_user').set_weights(mlp_user_embeddings)
+    model.get_layer('mlp_embedding_item').set_weights(mlp_item_embeddings)
+    
+    # MLP layers
+    for layer_id in range(1, num_layers):
+        mlp_layer_weights = mlp_model.get_layer(f'layer{layer_id}').get_weights()
+        model.get_layer(f'layer{layer_id}').set_weights(mlp_layer_weights)
+        
+    # Prediction weights
+    gmf_prediction = gmf_model.get_layer('prediction').get_weights()
+    mlp_prediction = mlp_model.get_layer('prediction').get_weights()
+    new_weights = np.concatenate((gmf_prediction[0], mlp_prediction[0]), axis=0)
+    new_b = gmf_prediction[1] + mlp_prediction[1]
+    
+    model.get_layer('prediction').set_weights([alpha*new_weights, (1-alpha)*new_b])    
     
     return model
 
