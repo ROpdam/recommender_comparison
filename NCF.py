@@ -7,6 +7,12 @@ import progressbar
 import tensorflow as tf
 
 class NCF:
+    """
+    Using the NCF we build Generalized Matrix Factorisation (GMF), Multiplayer Perceptron Matrix Factorisation (MLP) and combine the two     in Neural Matrix Factorisation (NeuMF)
+    - paper: http://papers.www2017.com.au.s3-website-ap-southeast-2.amazonaws.com/proceedings/p173.pdf
+    - blog: https://medium.com/@victorkohler/collaborative-filtering-using-deep-neural-networks-in-tensorflow-96e5d41a39a1
+    - code: https://github.com/Leavingseason/NeuralCF/blob/master
+    """
     def __init__(self, total_users, total_items, GMF_params={}, MLP_params={}, NeuMF_params={}):
         self.total_users = total_users
         self.total_items = total_items
@@ -330,50 +336,55 @@ class NCF:
         self.NeuMF.get_layer('prediction').set_weights([alpha*new_weights, (1-alpha)*new_b])    
         
         
-        def get_predictions(model, train_set, test_set, rank_at=20):
-            test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
-            for u in pbar(test_user_items.index):
-                true_item = test_user_items[u]
+    def get_predictions(self, name, train_set, test_set, rank_at=20):
+        model, _ = self.get_model(name)
+        test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+        pbar = progressbar.ProgressBar()
+        preds_ranked = []
+        true_items = []
+        for u in pbar(test_user_items.index):
+            true_item = test_user_items[u]
 
-                user_array = np.full(self.total_items, u, dtype='int32')
-                preds = np.hstack(model.predict([user_array, np.arange(self.total_items)], batch_size=self.total_items, verbose=0))
-                ids = np.argpartition(preds, -rank_at)[-rank_at:]
-                best_ids = np.argsort(preds[ids])[::-1]
-                best = np.arange(total_items)[ids[best_ids]]
+            user_array = np.full(self.total_items, u, dtype='int32')
+            preds = np.hstack(model.predict([user_array, np.arange(self.total_items)], batch_size=self.total_items, verbose=0))
+            ids = np.argpartition(preds, -rank_at)[-rank_at:]
+            best_ids = np.argsort(preds[ids])[::-1]
+            best = np.arange(self.total_items)[ids[best_ids]]
 
-                preds_ranked.append(best)
-                true_items.append(true_item)
+            preds_ranked.append(best)
+            true_items.append(true_item)
 
-            ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
-                                     columns=['users', 'pred_items_ranked', 'true_id'])
-            return ranked_df
-        
-        
-        def sample_prediction(model, train_set, test_set, sample_len=100, rank_at=20):
-            user_items = train_set.groupby('user_id')['item_id'].apply(list)
-            test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
-            train_items = train_set.item_id.unique()
+        ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
+                                 columns=['users', 'pred_items_ranked', 'true_id'])
+        return ranked_df
 
-            preds_ranked = []
-            true_items = []
-            pbar = progressbar.ProgressBar()
-            for u in pbar(test_user_items.index):
-                true_item = test_user_items[u]
-                pos_items = user_items[u]
-                neg_items = set(train_items) - set(pos_items)
-                neg_sample = np.random.choice(list(neg_items), sample_len-1)
-                total_sample = np.append(neg_sample, true_item)
-                user_array = np.full(len(total_sample), u, dtype='int32')
+    #To be removed
+    def sample_prediction(self, name, train_set, test_set, sample_len=100, rank_at=20):
+        model, _ = self.get_model(name)
+        user_items = train_set.groupby('user_id')['item_id'].apply(list)
+        test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+        train_items = train_set.item_id.unique()
 
-                preds = np.hstack(model.predict([user_array, np.array(total_sample)], batch_size=sample_len, verbose=0))
-                ids = np.argpartition(preds, -rank_at)[-rank_at:]
-                best_ids = np.argsort(preds[ids])[::-1]
-                best = total_sample[ids[best_ids]]
+        preds_ranked = []
+        true_items = []
+        pbar = progressbar.ProgressBar()
+        for u in pbar(test_user_items.index):
+            true_item = test_user_items[u]
+            pos_items = user_items[u]
+            neg_items = set(train_items) - set(pos_items)
+            neg_sample = np.random.choice(list(neg_items), sample_len-1)
+            total_sample = np.append(neg_sample, true_item)
+            user_array = np.full(len(total_sample), u, dtype='int32')
 
-                preds_ranked.append(best)
-                true_items.append(true_item)
+            preds = np.hstack(model.predict([user_array, np.array(total_sample)], batch_size=sample_len, verbose=0))
+            ids = np.argpartition(preds, -rank_at)[-rank_at:]
+            best_ids = np.argsort(preds[ids])[::-1]
+            best = total_sample[ids[best_ids]]
 
-            ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
-                                     columns=['users', 'pred_items_ranked', 'true_id'])
+            preds_ranked.append(best)
+            true_items.append(true_item)
 
-            return ranked_df
+        ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
+                                 columns=['users', 'pred_items_ranked', 'true_id'])
+
+        return ranked_df
