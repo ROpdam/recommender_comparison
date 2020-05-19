@@ -263,3 +263,35 @@ class BPR():
             print('Ranking time:', round(time.time() - s, 2))
 
         return ranked_df
+    
+    def sample_prediction(self, train_set, test_set, sample_len=100, rank_at=20):
+        user_items = train_set.groupby('user_id')['item_id'].apply(list)
+        test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+        train_items = train_set.item_id.unique()
+
+        preds_ranked = []
+        true_items = []
+        pbar = progressbar.ProgressBar()
+        for u in pbar(test_user_items.index):
+            true_item = test_user_items[u]
+            pos_items = user_items[u]
+            neg_items = set(train_items) - set(pos_items)
+            neg_sample = np.random.choice(list(neg_items), sample_len-1)
+            total_sample = np.append(neg_sample, true_item)
+            user_array = np.full(len(total_sample), u, dtype='int32')
+            preds = []
+            for i in total_sample:
+                preds.append(np.dot(self.model['p'][u], self.model['q'][i].T))
+            preds = np.array(preds)
+#             preds = np.hstack(model.predict([user_array, np.array(total_sample)], batch_size=sample_len, verbose=0))
+            ids = np.argpartition(preds, -rank_at)[-rank_at:]
+            best_ids = np.argsort(preds[ids])[::-1]
+            best = total_sample[ids[best_ids]]
+
+            preds_ranked.append(best)
+            true_items.append(true_item)
+
+        ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
+                                 columns=['users', 'pred_items_ranked', 'true_id'])
+
+        return ranked_df
