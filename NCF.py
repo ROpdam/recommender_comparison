@@ -5,6 +5,8 @@ import pandas as pd
 import os
 import progressbar
 import tensorflow as tf
+import multiprocessing as mp
+
 
 class NCF:
     """
@@ -211,7 +213,26 @@ class NCF:
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
             
         
-    def train_model(self, name='', samples=[], verbose=1, store_path=''):
+#     def train_model(self, name='', samples=[], verbose=1, store_path=''):
+#         model, params = self.get_model(name)
+        
+#         ckpts_prefix = os.path.join(params['ckpt_dir'], "ckpt")
+#         ckpts_callback = tf.keras.callbacks.ModelCheckpoint(filepath=ckpts_prefix,    
+#                                                          monitor='loss',    
+#                                                          mode='min',    
+#                                                          save_best_only=True,
+#                                                          save_weights_only=True)
+        
+#         if len(samples) == 0:
+#             raise Exception('No samples available, create samples first using: create_samples')
+        
+#         self.fit(model, params, samples, [ckpts_callback], verbose)
+        
+#         if len(store_path) > 0:
+#             model.save_weights(store_path)
+
+########################################################################################
+    def train_model(self, name='', train_set=[], verbose=1, store_path=''):
         model, params = self.get_model(name)
         
         ckpts_prefix = os.path.join(params['ckpt_dir'], "ckpt")
@@ -221,26 +242,26 @@ class NCF:
                                                          save_best_only=True,
                                                          save_weights_only=True)
         
-        if len(samples) == 0:
+        if len(train_set) == 0:
             raise Exception('No samples available, create samples first using: create_samples')
         
-        self.fit(model, params, samples, [ckpts_callback], verbose)
+        self.fit(model, params, train_set, [ckpts_callback], verbose)
         
         if len(store_path) > 0:
             model.save_weights(store_path)
-        
-
-    def fit(self, model, params, samples, callbacks, verbose):
+          
+            
+    def fit(self, model, params, train_set, callbacks, verbose):
         print(f'\nFitting {model._name} with parameters:')
         print(pd.DataFrame.from_dict(params, orient='index'))
-        all_user_inputs, all_item_inputs, all_labels = samples
+        user_items = train_set.groupby('user_id')['item_id'].apply(list)
+        train_users = train_set.user_id.unique()
+        train_items = train_set.item_id.unique()
+        num_processes = mp.cpu_count()
+
         for epoch in range(params['epochs']):
             print(f'Epoch: {epoch}')
-
-            user_inputs = all_user_inputs[epoch]
-            item_inputs = all_item_inputs[epoch]
-            labels = all_labels[epoch]
-
+            user_inputs, item_inputs, labels = self.create_sample(user_items, train_users, train_items, params, num_processes)
             hist = model.fit([np.array(user_inputs), np.array(item_inputs)], 
                       np.array(labels), 
                       batch_size=params['batch_size'], 
@@ -250,6 +271,75 @@ class NCF:
                       callbacks=callbacks)
 
             self.history[model._name]['loss'].append(round(hist.history['loss'][0],5))
+     
+    
+    def create_sample(self, user_items, train_users, train_items, params, num_processes):
+        samples_sizes_split = np.array_split(np.array(range(params['sample_size'])),8)
+        args = []
+        for samples_size in samples_sizes_split:
+            args.append((user_items, train_users, train_items, len(samples_size), params['num_neg']))
+#     pool.map(unwrap_self_f, zip([self]*len(names), names))
+        with mp.Pool(processes=num_processes) as pool:
+#             results = pool.starmap(self.create_sample_worker, args)
+            results = pool.starmap(unwrap_self_f, zip([self]*len(args), args))
+
+        user_inputs, item_inputs, labels = [], [], []
+        for res_epochs in results:
+            user_inputs.extend(res_epochs['u'])
+            item_inputs.extend(res_epochs['i'])
+            labels.extend(res_epochs['l'])
+
+        return user_inputs, item_inputs, labels
+        
+        
+    def create_sample_worker(self, user_items, train_users, train_items, sample_size, num_neg):
+        user_inputs, item_inputs, labels = [], [], []
+        print('worker')
+        for s in range(sample_size):
+            # Add positive item
+            u = np.random.choice(train_users)
+            u_items = user_items[u]
+            i = np.random.choice(u_items)
+
+            user_inputs.append(u)
+            item_inputs.append(i)
+            labels.append(1)
+
+            # Add negative item
+            for i in range(num_neg):
+                j = np.random.choice(train_items)
+                while j in u_items:  # neg item j cannot be in the set of pos items of user u
+                    j = np.random.choice(train_items)
+
+                user_inputs.append(u)
+                item_inputs.append(j)
+                labels.append(0)
+
+        return {'u':user_inputs, 'i':item_inputs, 'l':labels}
+            
+#############################################################################
+
+
+#     def fit(self, model, params, samples, callbacks, verbose):
+#         print(f'\nFitting {model._name} with parameters:')
+#         print(pd.DataFrame.from_dict(params, orient='index'))
+#         all_user_inputs, all_item_inputs, all_labels = samples
+#         for epoch in range(params['epochs']):
+#             print(f'Epoch: {epoch}')
+
+#             user_inputs = all_user_inputs[epoch]
+#             item_inputs = all_item_inputs[epoch]
+#             labels = all_labels[epoch]
+
+#             hist = model.fit([np.array(user_inputs), np.array(item_inputs)], 
+#                       np.array(labels), 
+#                       batch_size=params['batch_size'], 
+#                       verbose=verbose, 
+#                       epochs=1, 
+#                       shuffle=True,
+#                       callbacks=callbacks)
+
+#             self.history[model._name]['loss'].append(round(hist.history['loss'][0],5))
     
     
     #TODO: Multiprocessing?
@@ -343,8 +433,7 @@ class NCF:
         preds_ranked = []
         true_items = []
         for u in pbar(test_user_items.index):
-            true_item = test_user_items[u]
-
+            true_items.append(test_user_items[u])
             user_array = np.full(self.total_items, u, dtype='int32')
             preds = np.hstack(model.predict([user_array, np.arange(self.total_items)], batch_size=self.total_items, verbose=0))
             ids = np.argpartition(preds, -rank_at)[-rank_at:]
@@ -352,12 +441,32 @@ class NCF:
             best = np.arange(self.total_items)[ids[best_ids]]
 
             preds_ranked.append(best)
-            true_items.append(true_item)
 
         ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
                                  columns=['users', 'pred_items_ranked', 'true_id'])
         return ranked_df
 
+    def get_predictions_2(self, name, train_set, test_set, rank_at=20):
+        model, _ = self.get_model(name)
+        test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+        pbar = progressbar.ProgressBar()
+        preds_ranked = []
+        for u in pbar(test_user_items.index):
+
+            user_array = np.full(self.total_items, u, dtype='int32')
+            preds = np.hstack(model.predict([user_array, np.arange(self.total_items)], batch_size=self.total_items, verbose=0))
+            best = preds.argsort()[-20:]
+#             ids = np.argpartition(preds, -rank_at)[-rank_at:]
+#             best_ids = np.argsort(preds[ids])[::-1]
+#             best = np.arange(self.total_items)[ids[best_ids]]
+
+            preds_ranked.append(best)
+
+        ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, [test_user_items.index])),
+                                 columns=['users', 'pred_items_ranked', 'true_id'])
+        return ranked_df
+
+    
     #To be removed
     def sample_prediction(self, name, train_set, test_set, sample_len=100, rank_at=20):
         model, _ = self.get_model(name)
