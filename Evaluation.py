@@ -8,7 +8,7 @@ K = tf.keras.backend
 # Papers used:
 # 1. Devooght, Robin, and Hugues Bersini. "Collaborative filtering with recurrent neural networks." arXiv preprint arXiv:1608.07400 (2016).
 
-def get_metrics(ranked_df, steps, max_rank, stats=True):
+def get_metrics(ranked_df, steps=5, max_rank=20, stats=True):
     """
     Computes hitcount@, recall@ and precision@ for the given ranked_df on each step until the max_rank
     :param ranked_df: pandas df where each row contains, user, a list: pred_items_ranked, a list: true items

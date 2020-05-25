@@ -224,7 +224,7 @@ class BPR():
         df_results.to_pickle(log_path + res_name)
 
 
-    def get_predictions(self, test_set, rank_at, stats=True):
+    def get_predictions(self, test_set, rank_at=20, stats=True):
         """
         The provided MF model is used to obtain values for all items per user from the test set
         and rank at rank_at per user, finally the true items are put together in the ranked_df result
@@ -264,6 +264,7 @@ class BPR():
 
         return ranked_df
     
+    
     def sample_prediction(self, train_set, test_set, sample_len=100, rank_at=20):
         user_items = train_set.groupby('user_id')['item_id'].apply(list)
         test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
@@ -279,11 +280,7 @@ class BPR():
             neg_sample = np.random.choice(list(neg_items), sample_len-1)
             total_sample = np.append(neg_sample, true_item)
             user_array = np.full(len(total_sample), u, dtype='int32')
-            preds = []
-            for i in total_sample:
-                preds.append(np.dot(self.model['p'][u], self.model['q'][i].T))
-            preds = np.array(preds)
-#             preds = np.hstack(model.predict([user_array, np.array(total_sample)], batch_size=sample_len, verbose=0))
+            preds = np.dot(self.model['p'][u], self.model['q'][total_sample].T)
             ids = np.argpartition(preds, -rank_at)[-rank_at:]
             best_ids = np.argsort(preds[ids])[::-1]
             best = total_sample[ids[best_ids]]
