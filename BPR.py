@@ -36,7 +36,7 @@ class BPR():
         self.val_user_items = pd.DataFrame()
         self.val_users = []
 
-    def train_model(self, train_set, val_set=[], verbose=1):
+    def train_model(self, train_set=[], val_set=[], sample_path='', verbose=1):
         """
         Fit BPR to the train_set, if val_set is provided the AUC metrics will be computed and printed per iteration
         :param train_set: pandas df containing user_id and item_id
@@ -49,22 +49,16 @@ class BPR():
         if self.seed > 0:
             np.random.seed(self.seed)
 
-        ## Used for sampling
-        self.user_items = train_set.groupby('user_id')['item_id'].apply(list)
-        self.train_users = train_set.user_id.unique()
-        self.train_items = train_set.item_id.unique()
-
+        ## Used for validating
         if len(val_set) > 0:
-            ## Used for validating
             self.val_user_items = val_set.groupby('user_id')['item_id'].apply(list)
             self.val_users = val_set.user_id.unique()
-
         
-
-        ## Create samples for all iterations
-        if verbose == 1:
-            print(f'Creating {self.n_iterations} samples of length {self.sample_size}')
-        all_uij_samples = self.sample()
+        ## Create or load samples
+        if len(sample_path) == 0:
+            all_uij_samples = self.create_samples(train_set)
+        else:
+            all_uij_samples = np.load(sample_path)
         
         self.fit(all_uij_samples, val_set, verbose)
         
@@ -113,8 +107,10 @@ class BPR():
             self.model['q'] = q
 
             if len(val_set) > 0:  # TODO: safe best & early stopping
-                val_auc = self.AUC()
-                self.model['val_auc'].append(val_auc)
+#                 val_auc = self.AUC()
+#                 self.model['val_auc'].append(val_auc)
+                val_predictions = self.get_predictions()
+                val_metrics = get_metrics(val_predictions)
                 if verbose == 1:
                     print('iteration:', iteration, ' loss:', round(it_loss, 6), ' val AUC:',val_auc)  
             elif verbose == 1:
@@ -132,11 +128,18 @@ class BPR():
         self.model['learning_rate'] = alphas
         self.model['train_time'] = train_time
         
-    def sample(self):
+        
+    def create_samples(self, train_set=[]):
         """
         Creates n_iteration user (u), positive item (i), negative item (j), samples of sample_size from the training set
         :return: list of n_iteration samples of sample size
         """
+        print(f'Creating {self.n_iterations} samples of length {self.sample_size}')
+            
+        self.user_items = train_set.groupby('user_id')['item_id'].apply(list)
+        self.train_users = train_set.user_id.unique()
+        self.train_items = train_set.item_id.unique()
+            
         all_uij_samples = []
         pbar = progressbar.ProgressBar()
         for n in pbar(range(self.n_iterations)):
