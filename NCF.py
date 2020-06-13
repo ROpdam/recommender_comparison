@@ -6,6 +6,7 @@ import os
 import progressbar
 import tensorflow as tf
 import multiprocessing as mp
+import matplotlib.pyplot as plt
 from Evaluation import get_metrics
 
 
@@ -73,6 +74,7 @@ class NCF:
                                outputs=[final_predictions])
         model._name="GMF"
         self.GMF = model
+        self.history[model._name]['loss'] = []
         
         self.compile_model(model._name)
 
@@ -133,6 +135,7 @@ class NCF:
                       outputs=[prediction])
         model._name = 'MLP'
         self.MLP = model
+        self.history[model._name]['loss'] = []
         
         self.compile_model(model._name)
 
@@ -203,16 +206,11 @@ class NCF:
         model = tf.keras.Model(inputs=[user_input, item_input], 
                       outputs=[prediction])
         model._name = 'NeuMF'
+        self.history[model._name]['loss'] = []
 
         self.NeuMF = model
         self.compile_model(model._name)
         
-    #To Be removed
-#     def loss_decorator(self, from_logits=True):
-#         def loss(labels, logits):
-#             return tf.keras.losses.binary_crossentropy(labels, logits, from_logits=from_logits)
-#         return loss
-    
     
     def compile_model(self, model_name):
         """
@@ -230,7 +228,7 @@ class NCF:
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
     
     
-    def train_model(self, name, samples=[], train_set=[], val_set=[], verbose=1, store_path='', val_kwargs):
+    def train_model(self, name, samples=[], train_set=[], val_set=[], verbose=1, store_path=''):
         """
         """
         model, params = self.get_model(name)
@@ -245,7 +243,7 @@ class NCF:
         if len(samples) == 0:
             raise Exception('No samples available, create samples first using: create_samples')
         
-            val_metrics = self.fit(model, params, samples, train_set, val_set, [ckpts_callback], verbose, **val_kwargs)
+        val_metrics = self.fit(model, params, samples, train_set, val_set, [ckpts_callback], verbose)
         
         if len(store_path) > 0:
             model.save_weights(store_path)
@@ -256,17 +254,19 @@ class NCF:
     def fit(self, model, params, samples, train_set, val_set, callbacks, verbose):
         """
         """
-        print(f'\nFitting {model._name} with parameters:')
-        print(pd.DataFrame.from_dict(params, orient='index')[0])
+        if verbose == 1:
+            print(f'\nFitting {model._name} with parameters:')
+            print(pd.DataFrame.from_dict(params, orient='index')[0])
         
         if len(val_set) > 0:
             user_items = train_set.groupby('user_id')['item_id'].apply(list)
-            test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+            val_user_items = val_set.groupby('user_id')['item_id'].apply(list)
             train_items = train_set.item_id.unique()
             
         val_metrics = []
         for epoch in range(params['epochs']):
-            print(f'Epoch: {epoch}')
+            if verbose == 1:
+                print(f'Epoch: {epoch}')
 
             user_inputs = samples[epoch][0]
             item_inputs = samples[epoch][1]
@@ -281,9 +281,16 @@ class NCF:
                       callbacks=callbacks)
             
             if len(val_set) > 0 and epoch % verbose == 0:
-                ranked_df = self.sample_prediction(model._name, user_items, test_user_items, train_items)
-                val_metrics.append(get_metrics(ranked_df, 5, 20, stats=False))
+#                 ranked_sample_df = self.sample_prediction(model._name, user_items, val_user_items, train_items, val=True)
+#                 sample_metrics = get_metrics(ranked_sample_df, stats=False)
+#                 val_metrics.append(sample_metrics)
+#                 print(sample_metrics)
+                ranked_df = self.get_predictions(model._name, val_set)
+                val_metrics.append(get_metrics(ranked_df, stats=False))
                 print(val_metrics[-1:])
+#                 plt.plot(np.average(self.get_raw_predictions(model._name, train_set, val_set), axis=0))
+#                 plt.show()
+                
 
             self.history[model._name]['loss'].append(round(hist.history['loss'][0],5))
             
@@ -294,6 +301,7 @@ class NCF:
         """
         """
         print(f'Creating Samples for {name}')
+        
         _, params = self.get_model(name)
         all_user_inputs, all_item_inputs, all_labels = [], [], []
         user_items = data.groupby('user_id')['item_id'].apply(list)
@@ -333,11 +341,11 @@ class NCF:
     def get_model(self, name):
         """
         """
-        if self.GMF._name == name:
+        if type(self.GMF) is not str and self.GMF._name == name:
             return self.GMF, self.GMF_params
-        elif self.MLP._name == name:
+        elif type(self.MLP) is not str and self.MLP._name == name:
             return self.MLP, self.MLP_params
-        elif self.NeuMF._name == name:
+        elif type(self.NeuMF) is not str and self.NeuMF._name == name:
             return self.NeuMF, self.NeuMF_params
         
         raise Exception(f'{name} is an unkown model or not built yet')
@@ -395,7 +403,6 @@ class NCF:
             ids = np.argpartition(preds, -rank_at)[-rank_at:]
             best_ids = np.argsort(preds[ids])[::-1]
             best = total_sample[ids[best_ids]]
-#             best = total_sample[np.argsort(preds)][-rank_at:]
             preds_ranked.append(best)
 
         ranked_df = pd.DataFrame(list(zip(test_user_items.index, preds_ranked, true_items)),
@@ -407,23 +414,24 @@ class NCF:
         """
         """
         model, _ = self.get_model(name)
-        if !val:
+        if not val:
             user_items = train.groupby('user_id')['item_id'].apply(list)
             test_user_items = test.groupby('user_id')['item_id'].apply(list)
-            train_items = train_set.item_id.unique()
+            train_items = train.item_id.unique()
         else:
             user_items = train
             test_user_items = test
             
         preds_ranked = []
         true_items = []
-        pbar = progressbar.ProgressBar()
-        for u in pbar(test_user_items.index):
+#         pbar = progressbar.ProgressBar()
+#         for u in pbar(test_user_items.index):
+        for u in test_user_items.index:
             true_item = test_user_items[u]
             pos_items = user_items[u]
             neg_items = set(train_items) - set(pos_items)
             neg_sample = np.random.choice(list(neg_items), sample_len-1)
-            total_sample = np.append(neg_sample, true_item)
+            total_sample = np.append(true_item, neg_sample)
             user_array = np.full(len(total_sample), u, dtype='int32')
 
             preds = np.hstack(model.predict([user_array, total_sample], batch_size=sample_len, verbose=0))
@@ -439,3 +447,32 @@ class NCF:
                                  columns=['users', 'pred_items_ranked', 'true_id'])
 
         return ranked_df
+    
+    def get_raw_predictions(self, name, train, test, sample_len=0):
+        all_preds = []
+        test_user_items = test.groupby('user_id')['item_id'].apply(list)
+        model, _ = self.get_model(name)
+        if sample_len > 0:
+            user_items = train.groupby('user_id')['item_id'].apply(list)
+            test_user_items = test.groupby('user_id')['item_id'].apply(list)
+            train_items = train.item_id.unique()
+            
+        pbar = progressbar.ProgressBar()
+        for u in pbar(test_user_items.index):
+            if sample_len > 0:
+                true_item = test_user_items[u]
+                pos_items = user_items[u]
+                neg_items = set(train_items) - set(pos_items)
+                neg_sample = np.random.choice(list(neg_items), sample_len-1)
+                total_sample = np.append(true_item, neg_sample)
+                user_array = np.full(len(total_sample), u, dtype='int32')
+                preds = np.hstack(model.predict([user_array, total_sample], batch_size=sample_len, verbose=0))
+            else:
+                user_array = np.full(self.total_items, u, dtype='int32')
+                total_sample = np.arange(self.total_items)
+                preds = (np.hstack(model.predict([user_array, total_sample], batch_size=self.total_items, verbose=0)))
+            
+            all_preds.append(np.sort(preds)[::-1])
+
+         
+        return all_preds
