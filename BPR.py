@@ -4,6 +4,7 @@ import math
 import pandas as pd
 import random
 import os
+from Evaluation import get_metrics
 from sklearn.metrics import roc_auc_score
 import progressbar
 
@@ -109,10 +110,10 @@ class BPR():
             if len(val_set) > 0:  # TODO: safe best & early stopping
 #                 val_auc = self.AUC()
 #                 self.model['val_auc'].append(val_auc)
-                val_predictions = self.get_predictions()
-                val_metrics = get_metrics(val_predictions)
+                val_predictions = self.get_predictions(test_set=val_set, stats=False)
+                val_metrics = get_metrics(val_predictions, stats=False)
                 if verbose == 1:
-                    print('iteration:', iteration, ' loss:', round(it_loss, 6), ' val AUC:',val_auc)  
+                    print('iteration:', iteration, ' loss:', round(it_loss, 6), ' rec@10:',val_metrics['recall'].iloc[2])  
             elif verbose == 1:
                 print('iteration:', iteration, ' loss:', round(it_loss, 6))
 
