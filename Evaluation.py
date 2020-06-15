@@ -8,7 +8,7 @@ K = tf.keras.backend
 # Papers used:
 # 1. Devooght, Robin, and Hugues Bersini. "Collaborative filtering with recurrent neural networks." arXiv preprint arXiv:1608.07400 (2016).
 
-def get_metrics(ranked_df, steps=5, max_rank=20, stats=True):
+def get_metrics(ranked_df, steps=5, max_rank=20, stats=True, ndcg=True):
     """
     Computes hitcount@, recall@ and precision@ for the given ranked_df on each step until the max_rank
     :param ranked_df: pandas df where each row contains, user, a list: pred_items_ranked, a list: true items
@@ -23,13 +23,14 @@ def get_metrics(ranked_df, steps=5, max_rank=20, stats=True):
     recs_at = []
     precs_at = []
     ndcgs_at = []
-    metrics = pd.DataFrame(columns=['rank_at', 'hitcounts', 'recall', 'precision', 'ndcg'])
+    metrics = pd.DataFrame(columns=['rank_at', 'hitcounts', 'recall', 'precision'])
     for rank in ranks_at:
         hitcount = 0
         ndcg_at = 0
         for i, row in ranked_df.iterrows():
-            ndcg_at += getNDCG(row['pred_items_ranked'][:rank], row['true_id'])
             hitcount += len(set(row['true_id']) & set(row['pred_items_ranked'][:rank]))
+            if ndcg:
+                ndcg_at += getNDCG(row['pred_items_ranked'][:rank], row['true_id'])
 
         prec_at = hitcount / rank / len(ranked_df)
         rec_at = hitcount / len(ranked_df.iloc[0]['true_id']) / len(ranked_df)
@@ -37,13 +38,15 @@ def get_metrics(ranked_df, steps=5, max_rank=20, stats=True):
         hitcounts.append(hitcount)
         recs_at.append(rec_at)
         precs_at.append(prec_at)
-        ndcgs_at.append(ndcg_at/len(ranked_df))
+        if ndcg:
+            ndcgs_at.append(ndcg_at/len(ranked_df))
 
     metrics['rank_at'] = ranks_at
     metrics['hitcounts'] = hitcounts
     metrics['recall'] = recs_at
     metrics['precision'] = precs_at
-    metrics['ndcg'] = ndcgs_at
+    if ndcg:
+        metrics['ndcg'] = ndcgs_at
     if stats:
         print('Obtaining metrics time:', round(time.time() - s, 2))
 

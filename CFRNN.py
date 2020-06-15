@@ -6,6 +6,7 @@ import random
 import os
 import progressbar
 import tensorflow as tf
+import matplotlib.pyplot as plt
 from Data_prep import standard_padding, get_x_y_sequences
 from Helpers import TimingCallback
 K = tf.keras.backend
@@ -108,25 +109,6 @@ class CFRNN:
                         verbose=verbose,
                         initial_epoch=initial_epoch)
     
-    # To be removed
-    def update_results(model_dict, final_results):
-        """
-        If the model was already present in the all_models dataframe in store_LSTM_model, this function will change
-        the number of epochs, add the train_time and append the training history of the model_dict model provided by
-        store_LSTM_model
-        :param model_dict: all stats from a model as a dict
-        :param final_results: the new stats of the same model to update model_dict with
-        :return: Updated final_results with model_dict
-        """
-        print('Adding to existing DataFrame')
-        final_results['epochs'] = model_dict['epochs']
-        final_results['train_time'] += model_dict['train_time']
-        train_values = ['recall', 'val_recall', 'loss', 'val_loss']
-        for train_value in train_values:
-            final_results[train_value].extend(model_dict[train_value])
-
-        return final_results
-
 
     def store_LSTM_model(self, path, params, history, train_time, eval_metrics=[], store=True):
         """
@@ -177,17 +159,17 @@ class CFRNN:
                  true_id extracted from test_set (as input for Evaluation.get_metrics
         """
         self.batch_size = None
-        self.build_LSTM_model(mask_value=self.pad_value, ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
+        self.build_model(ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
             
         n_batches = int(len(left_out_items) / batch_size)
         data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
-        data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, pad_value, eval=True, stats=False)
+        data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, self.pad_value, eval=True, stats=False)
         data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
 
         # Extend final predictions with predictions made on batches
         final_preds = []
         for split in data_seqs_splits:
-            final_preds.extend(self.make_predictions(split, pad_value, rank_at))
+            final_preds.extend(self.make_predictions(split, rank_at))
 
         # Get True items
         test_left_out_items = left_out_items.groupby('user_id')['item_id'].apply(list)
@@ -289,6 +271,7 @@ class CFRNN:
             return tf.keras.losses.categorical_crossentropy(oh_labels, logits, from_logits=True)
         return loss
 
+    
     def compile_model(self, diversity_bias=True, train_set=[]):
         if diversity_bias:
             if len(train_set) == 0:
@@ -335,3 +318,19 @@ class CFRNN:
         n_set = df[df['user_id'].isin(users_ids)]
         remaining_set = df.drop(n_set.index)
         return remaining_set, n_set
+
+    
+    def plot_training(self):
+        his = self.history.history
+        
+        plt.plot(his['loss'])
+        plt.plot(his['val_loss'])
+        plt.legend(['loss', 'val_loss'])
+        plt.title('Training Loss')
+        plt.show()
+        
+        plt.plot(his['recall'])
+        plt.plot(his['val_recall'])
+        plt.legend(['recall', 'val_recall'])
+        plt.title('Training Recall')
+        plt.show()
