@@ -16,6 +16,7 @@ class CFRNN:
 
     def __init__(self, total_users, total_items, params):
         self.total_users = total_users
+        self.total_items = total_items
         self.params = params
         self.model_id = params['model_id']
         self.train_time = params['train_time']
@@ -27,12 +28,15 @@ class CFRNN:
         self.embedding_dim = params['embedding_dim']
         self.rnn_units = params['rnn_units']
         self.ckpt_dir = ''.join([params['ckpt_dir'], '_', params['model_id']])
+        self.pad_value = params['pad_value']
+        self.test_users = params['test_users']
+        self.val_users = params['val_users']
         self.model = []
         self.history = {}
         self.diversity_bias = []
      
     
-    def build_LSTM_model(self, mask_value, ckpt_dir='', return_sequences=True, initializer='glorot_uniform', summary=True):
+    def build_model(self, ckpt_dir='', return_sequences=True, initializer='glorot_uniform', summary=True):
         """
         Building the LSTM model in Keras
         :param total_items: Number of items from the full df
@@ -48,7 +52,7 @@ class CFRNN:
                                       self.embedding_dim,
                                       batch_input_shape=[self.batch_size, None]),
 
-            tf.keras.layers.Masking(mask_value=mask_value),
+            tf.keras.layers.Masking(mask_value=self.total_items),
 
             tf.keras.layers.LSTM(units=self.rnn_units,
                                  return_sequences=return_sequences,
@@ -62,12 +66,13 @@ class CFRNN:
             model.load_weights(tf.train.latest_checkpoint(ckpt_dir)).expect_partial()
         
         self.model = model
+        model._name = self.model_id
         
         if summary:
             print(model.summary())
     
     
-    def train_model(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'store_hist', 'timing'], initial_epoch=0, append_hist=True):
+    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'store_hist', 'timing'], initial_epoch=0, verbose=1, append_hist=True):
         # Configure Callbacks
         all_callbacks = []
         if 'checkpoint' in callback_names:
@@ -90,16 +95,17 @@ class CFRNN:
         if 'timing' in callback_names:
             all_callbacks.append(TimingCallback())
         
-        self.fit(train_set, val_set, all_callbacks, initial_epoch)
+        self.fit(train_set, val_set, all_callbacks, initial_epoch, verbose)
         
         
-    def fit(self, train_set, val_set, all_callbacks, initial_epoch):
+    def fit(self, train_set, val_set, all_callbacks, initial_epoch, verbose):
         print('Fitting LSTM with parameters:')
-        print(pd.DataFrame.from_dict(self.params, orient='index'))
+        print(pd.DataFrame.from_dict(self.params, orient='index')[0])
         self.history = self.model.fit(x=train_set, 
                         validation_data=val_set, 
                         epochs=self.epochs,
                         callbacks=all_callbacks,
+                        verbose=verbose,
                         initial_epoch=initial_epoch)
     
     # To be removed
@@ -146,14 +152,6 @@ class CFRNN:
 
         if os.path.exists(path):
             all_models = pd.read_pickle(path)
-            # TO BE REMOVED
-    #         if final_results['model_id'] in set(all_models['model_id']):
-    #             model_index = 0
-    #             if len(all_models) > 1:
-    #                 model_index = all_models[all_models['model_id'] == final_results['model_id']].index[0]
-    #             new_final_results = update_results(all_models.iloc[model_index].to_dict(), final_results)
-    #             all_models = all_models.drop(model_index).append(new_final_results, ignore_index=True)
-    #         else:
             all_models = all_models.append(final_results, ignore_index=True)
         else:
             all_models = pd.DataFrame(columns=final_results.keys())
@@ -165,7 +163,7 @@ class CFRNN:
         return all_models
 
 
-    def get_predictions(self, test_set, left_out_items, batch_size, pad_value, rank_at, ckpt_dir='', summary=False):
+    def get_predictions(self, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False):
         """
         Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
         Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
@@ -179,7 +177,7 @@ class CFRNN:
                  true_id extracted from test_set (as input for Evaluation.get_metrics
         """
         self.batch_size = None
-        self.build_LSTM_model(mask_value=pad_value, ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
+        self.build_LSTM_model(mask_value=self.pad_value, ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
             
         n_batches = int(len(left_out_items) / batch_size)
         data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
@@ -200,7 +198,7 @@ class CFRNN:
         return preds_df
 
 
-    def make_predictions(self, user_sequences, pad_value, rank_at):
+    def make_predictions(self, user_sequences, rank_at):
         """
         :param model:
         :param user_sequences:
@@ -214,7 +212,7 @@ class CFRNN:
                 pred_item_id = np.argmax(prediction)
                 final_preds[u_index][i] = pred_item_id
 
-                padding_values = np.where(user_sequences[u_index] == pad_value)[0]
+                padding_values = np.where(user_sequences[u_index] == self.pad_value)[0]
                 if padding_values.shape[0] > 0:
                     first_pad_value = np.min(padding_values)
                     user_sequences[u_index][first_pad_value] = pred_item_id
@@ -294,7 +292,7 @@ class CFRNN:
     def compile_model(self, diversity_bias=True, train_set=[]):
         if diversity_bias:
             if len(train_set) == 0:
-                raise Exception('Cannot create Diversity Bias without a test set')
+                raise Exception('Cannot create Diversity Bias without a train set')
             print('Creating Diveristy Bias')
             self.create_diversity_bias(train_set)
             loss = self.diversity_bias_loss()
@@ -304,9 +302,10 @@ class CFRNN:
         optimizer = tf.keras.optimizers.Adagrad(lr=self.learning_rate)
         metrics = [self.recall_metric()]
         self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-        print('Compiled Model')
+        print('Compiled LSTM')
         
-    def create_seq_batch_tf_dataset(self, df, shift, pad_value, stats=True, drop_remainder=True):
+        
+    def create_seq_batch_tf_dataset(self, df, shift=1, stats=True, drop_remainder=True):
         """
         :param df:
         :param shift:
@@ -317,10 +316,31 @@ class CFRNN:
         :return:
         """
         user_sequences_x, user_sequences_y, median = get_x_y_sequences(df, shift, stats=stats)
-        sequences_data_x = standard_padding(user_sequences_x, self.max_seq_len, pad_value=pad_value, stats=stats)
-        sequences_data_y = standard_padding(user_sequences_y, self.max_seq_len, pad_value=pad_value, stats=stats)
+        sequences_data_x = standard_padding(user_sequences_x, self.max_seq_len, pad_value=self.pad_value, stats=stats)
+        sequences_data_y = standard_padding(user_sequences_y, self.max_seq_len, pad_value=self.pad_value, stats=stats)
 
         dataset = tf.data.Dataset.zip((sequences_data_x, sequences_data_y))
         dataset = dataset.batch(self.batch_size, drop_remainder=drop_remainder)
 
         return dataset
+    
+    
+    def data_split(self, df, val=False):
+        train_set = pd.DataFrame()
+        test_set = pd.DataFrame()
+    
+        if val:
+            rand_test_users = np.random.choice(df.user_id.unique(), self.val_users, replace=False)
+        else: 
+            rand_test_users = np.random.choice(df.user_id.unique(), self.test_users, replace=False)
+        pbar = progressbar.ProgressBar()
+        for user_id in pbar(df.user_id.unique()):
+            user_df = df[df.user_id == user_id]
+            if user_id in rand_test_users:
+                split = np.array_split(user_df, 2)
+                test_set = pd.concat([test_set, split[1]])
+                df = pd.concat([df[df.user_id != user_id], split[0]])
+
+        train_set = df
+
+        return train_set, test_set
