@@ -323,24 +323,15 @@ class CFRNN:
         dataset = dataset.batch(self.batch_size, drop_remainder=drop_remainder)
 
         return dataset
-    
+
     
     def data_split(self, df, val=False):
-        train_set = pd.DataFrame()
-        test_set = pd.DataFrame()
-    
         if val:
-            rand_test_users = np.random.choice(df.user_id.unique(), self.val_users, replace=False)
+            n = self.val_users
         else: 
-            rand_test_users = np.random.choice(df.user_id.unique(), self.test_users, replace=False)
-        pbar = progressbar.ProgressBar()
-        for user_id in pbar(df.user_id.unique()):
-            user_df = df[df.user_id == user_id]
-            if user_id in rand_test_users:
-                split = np.array_split(user_df, 2)
-                test_set = pd.concat([test_set, split[1]])
-                df = pd.concat([df[df.user_id != user_id], split[0]])
-
-        train_set = df
-
-        return train_set, test_set
+            n = self.test_users
+            
+        users_ids = np.random.choice(df['user_id'].unique(), n, replace=False)
+        n_set = df[df['user_id'].isin(users_ids)]
+        remaining_set = df.drop(n_set.index)
+        return remaining_set, n_set
