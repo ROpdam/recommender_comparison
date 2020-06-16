@@ -54,9 +54,9 @@ def get_metrics(ranked_df, steps=5, max_rank=20, stats=True, ndcg=True):
 
 import math
 import time
-def getNDCG(ranklist, gtItem):
-    for i in range(len(ranklist)):
-        item = ranklist[i]
-        if item == gtItem:
+def getNDCG(ranklist, true_item):
+    for i, item in enumerate(ranklist):
+        if item == true_item[0]:
+#             print(math.log(2) / math.log(i+2))
             return math.log(2) / math.log(i+2)
     return 0

@@ -4,9 +4,11 @@ import math
 import pandas as pd
 import random
 import os
+import matplotlib.pyplot as plt
+import progressbar
 from Evaluation import get_metrics
 from sklearn.metrics import roc_auc_score
-import progressbar
+
 
 class BPR():
     """
@@ -24,6 +26,8 @@ class BPR():
         self.sample_size = int(params['sample_size'])
         self.seed = params['seed']
         self.alpha = params['alpha']
+        self.rho = params['rho']
+        self.sigma = params['sigma']
         self.reg_user = params['reg_user']
         self.reg_item = params['reg_item']
         self.alpha_decay = self.alpha / self.n_iterations
@@ -73,6 +77,7 @@ class BPR():
         s = time.time()
         ## Track losses and alphas used
         loss_list = []
+        val_rec_list = []
         alphas = []
         
         # Training Loop
@@ -110,8 +115,11 @@ class BPR():
             if len(val_set) > 0:  # TODO: safe best & early stopping
 #                 val_auc = self.AUC()
 #                 self.model['val_auc'].append(val_auc)
+
                 val_predictions = self.get_predictions(test_set=val_set, stats=False)
                 val_metrics = get_metrics(val_predictions, stats=False)
+                val_rec_list.append(val_metrics['recall'].iloc[2])
+            
                 if verbose == 1:
                     print('iteration:', iteration, ' loss:', round(it_loss, 6), ' rec@10:',val_metrics['recall'].iloc[2])  
             elif verbose == 1:
@@ -125,9 +133,10 @@ class BPR():
 
         # Store train values
         train_time = time.time() - s
+        self.model['train_time'] = train_time
+        self.model['val_rec@10'] = val_rec_list
         self.model['train_loss'] = loss_list
         self.model['learning_rate'] = alphas
-        self.model['train_time'] = train_time
         
         
     def create_samples(self, train_set=[]):
@@ -172,10 +181,10 @@ class BPR():
         :return: -None: changes the learning rate alpha of the model
         """
         if (last_loss < it_loss):  # bold driver
-            self.alpha = 0.5 * self.alpha
+            self.alpha = self.sigma * self.alpha
             return
 
-        self.alpha = (1 - self.alpha_decay) * self.alpha
+        self.alpha = self.rho * self.alpha
 
         
     def AUC(self):
@@ -207,8 +216,9 @@ class BPR():
         :param stats: print whether new results are created or the current model is added to an existing pandas df
         :return: -None:
         """
-        result_info = {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'],
-                       'train_speed': self.model['train_time'], 'lr': self.model['learning_rate'], 'file': file_name}
+        result_info = {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'], 
+                       'val_rec@10': self.model['val_rec@10'], 'train_speed': self.model['train_time'], 
+                       'lr': self.model['learning_rate'], 'file': file_name}
         other_info = {'p': self.model['p'],
                       'q': self.model['q']}  # 'train_size':train_size, 'test_size':test_size, 'val_size':val_size}
         final_log = dict(result_info, **self.params, **other_info)
@@ -296,3 +306,19 @@ class BPR():
                                  columns=['users', 'pred_items_ranked', 'true_id'])
 
         return ranked_df
+
+    
+    def plot_training(self):
+        his = self.model
+        fig, axes = plt.subplots(3, 1, figsize=(12,8))
+        fig.subplots_adjust(hspace=0.4)
+        
+        axes[0].plot(his['train_loss'])
+        axes[0].set_title('Training Loss')
+        
+        axes[1].plot(his['val_rec@10'])
+        axes[1].set_title('Validation Recall')
+        
+        axes[2].plot(his['learning_rate'])
+        axes[2].set_title('Learning Rate (Bold Driver)')
+        
