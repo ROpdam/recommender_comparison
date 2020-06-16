@@ -7,6 +7,7 @@ import progressbar
 import tensorflow as tf
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+import csv
 from Evaluation import get_metrics
 
 
@@ -228,40 +229,34 @@ class NCF:
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
     
     
-    def train_model(self, name, samples=[], train_set=[], val_set=[], verbose=1, store_path=''):
+    def train_model(self, name, samples=[], val_set=[], verbose=1):
         """
         """
         model, params = self.get_model(name)
         
-        ckpts_prefix = os.path.join(params['ckpt_dir'], "ckpt")
-        ckpts_callback = tf.keras.callbacks.ModelCheckpoint(filepath=ckpts_prefix,    
-                                                         monitor='loss',    
-                                                         mode='min',    
-                                                         save_best_only=True,
-                                                         save_weights_only=True)
+#         ckpts_prefix = os.path.join(params['ckpt_dir'], "ckpt")
+#         ckpts_callback = tf.keras.callbacks.ModelCheckpoint(filepath=ckpts_prefix,    
+#                                                          monitor='loss',    
+#                                                          mode='min',    
+#                                                          save_best_only=True,
+#                                                          save_weights_only=True)
         
         if len(samples) == 0:
             raise Exception('No samples available, create samples first using: create_samples')
         
-        val_metrics = self.fit(model, params, samples, train_set, val_set, [ckpts_callback], verbose)
+        val_metrics = self.fit(model, params, samples, val_set, verbose)
         
-        if len(store_path) > 0:
-            model.save_weights(store_path)
+        model.save_weights(params['weights_dir'])
 
         return val_metrics
 
     
-    def fit(self, model, params, samples, train_set, val_set, callbacks, verbose):
+    def fit(self, model, params, samples, val_set, verbose):
         """
         """
         if verbose == 1:
             print(f'\nFitting {model._name} with parameters:')
             print(pd.DataFrame.from_dict(params, orient='index')[0])
-        
-        if len(val_set) > 0:
-            user_items = train_set.groupby('user_id')['item_id'].apply(list)
-            val_user_items = val_set.groupby('user_id')['item_id'].apply(list)
-            train_items = train_set.item_id.unique()
             
         val_metrics = []
         for epoch in range(params['epochs']):
@@ -277,8 +272,7 @@ class NCF:
                       batch_size=params['batch_size'], 
                       verbose=verbose, 
                       epochs=1, 
-                      shuffle=True,
-                      callbacks=callbacks)
+                      shuffle=True)
             
             if len(val_set) > 0 and epoch % verbose == 0:
 #                 ranked_sample_df = self.sample_prediction(model._name, user_items, val_user_items, train_items, val=True)
@@ -336,7 +330,25 @@ class NCF:
             all_labels.append(labels)
 
         return [all_user_inputs, all_item_inputs, all_labels]
-           
+       
+        
+    def load_samples(self, sample_path, sample_name, n_samples):
+        samples = []
+        pbar = progressbar.ProgressBar()
+        for sample_num in pbar(range(n_samples)):
+            with open(f'{sample_path}{sample_name}_{sample_num}.csv', 'r') as read_obj:
+                sample = [[], [], []]
+                csv_reader = csv.reader(read_obj)
+                sample_str = list(csv_reader)
+
+                for user_input, item_input, label in zip(sample_str[0], sample_str[1], sample_str[2]):
+                    sample[0].append(int(user_input))
+                    sample[1].append(int(item_input))
+                    sample[2].append(int(label))
+
+            samples.append(sample)
+        return samples
+
         
     def get_model(self, name):
         """
@@ -355,11 +367,20 @@ class NCF:
         """
         """
         if len(GMF_weights_path) > 0:
-            self.build_GMF_model()
-            self.GMF.load_weights(GMF_weights_path).expect_partial()
+            GMF_path = GMF_weights_path
+        else:
+            GMF_path = self.GMF_params['weights_dir']
+            
         if len(MLP_weights_path) > 0:
-            self.build_MLP_model()
-            self.MLP.load_weights(MLP_weights_path).expect_partial()
+            MLP_path = MLP_weights_path
+        else:
+            MLP_path = self.MLP_params['weights_dir']
+        
+        self.build_GMF_model()
+        self.GMF.load_weights(GMF_path).expect_partial()
+        
+        self.build_MLP_model()
+        self.MLP.load_weights(MLP_path).expect_partial()
         
         # MF embeddings
         gmf_user_embeddings = self.GMF.get_layer('user_latent_factors').get_weights()

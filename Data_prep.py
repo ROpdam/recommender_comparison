@@ -212,7 +212,7 @@ def split_df_by_users(df, left_out_items, n_splits):
     return df_splits, left_out_items_split
 
 
-def leave_last_x_out_2(df, n_items=1):
+def leave_last_out(df, n_items=1):
     leave_out_indices = []
     for u in df.user_id.unique():
         df_user = df[df.user_id == u]

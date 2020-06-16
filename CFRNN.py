@@ -19,7 +19,6 @@ class CFRNN:
         self.total_users = total_users
         self.total_items = total_items
         self.params = params
-        self.model_id = params['model_id']
         self.train_time = params['train_time']
         self.epochs = params['epochs']
         self.batch_size = params['BATCH_SIZE']
@@ -28,7 +27,7 @@ class CFRNN:
         self.max_seq_len = params['max_seq_len']
         self.embedding_dim = params['embedding_dim']
         self.rnn_units = params['rnn_units']
-        self.ckpt_dir = ''.join([params['ckpt_dir'], '_', params['model_id']])
+        self.ckpt_dir = params['ckpt_dir']
         self.pad_value = params['pad_value']
         self.test_users = params['test_users']
         self.val_users = params['val_users']
@@ -67,13 +66,12 @@ class CFRNN:
             model.load_weights(tf.train.latest_checkpoint(ckpt_dir)).expect_partial()
         
         self.model = model
-        model._name = self.model_id
         
         if summary:
             print(model.summary())
     
     
-    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'store_hist', 'timing'], initial_epoch=0, verbose=1, patience=15, append_hist=True):
+    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'timing'], initial_epoch=0, verbose=1, patience=15, append_hist=True):
         # Configure Callbacks
         all_callbacks = []
         if 'checkpoint' in callback_names:
@@ -89,9 +87,9 @@ class CFRNN:
                                                            mode = 'max',
                                                            patience = patience))
             
-        if 'store_hist' in callback_names:
-                 all_callbacks.append(tf.keras.callbacks.CSVLogger(f'../CFRNN_storage/train_logs/log_{self.model_id }',
-                                                              append=append_hist))
+#         if 'store_hist' in callback_names:
+#                  all_callbacks.append(tf.keras.callbacks.CSVLogger(self.hist_dir,
+#                                                               append=append_hist))
             
         if 'timing' in callback_names:
             all_callbacks.append(TimingCallback())
@@ -110,7 +108,7 @@ class CFRNN:
                         initial_epoch=initial_epoch)
     
 
-    def store_LSTM_model(self, path, params, history, train_time, eval_metrics=[], store=True):
+    def store_model(self, path, params, history, train_time, eval_metrics=[], store=True):
         """
         Storing the trained and/or tested LSTM model in:
         1. An existing pandas dataframe if it already exists in path

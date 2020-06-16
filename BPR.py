@@ -205,7 +205,7 @@ class BPR():
         return auc
 
     
-    def store_results(self, log_path, res_name, file_name, stats=True):
+    def store_model(self, log_path, res_name, file_name, stats=True):
         """
         Store the model as a row in a pandas df (pickle) named res_name, stores: train loss, val_auc, train_time,
         learning_rates, file_name, p and q factors
