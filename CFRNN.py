@@ -73,13 +73,13 @@ class CFRNN:
             print(model.summary())
     
     
-    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'store_hist', 'timing'], initial_epoch=0, verbose=1, append_hist=True):
+    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'store_hist', 'timing'], initial_epoch=0, verbose=1, patience=15, append_hist=True):
         # Configure Callbacks
         all_callbacks = []
         if 'checkpoint' in callback_names:
             all_callbacks.append(tf.keras.callbacks.ModelCheckpoint(filepath = self.ckpt_dir,    
-                                                         monitor = 'val_recall',    
-                                                         mode = 'max',    
+                                                         monitor = 'loss',    
+                                                         mode = 'min',    
                                                          save_best_only = True,
                                                          save_weights_only = True))
             
@@ -87,7 +87,7 @@ class CFRNN:
             all_callbacks.append(tf.keras.callbacks.EarlyStopping(monitor = 'val_recall',
                                                            min_delta = 0.0001,
                                                            mode = 'max',
-                                                           patience = 15))
+                                                           patience = patience))
             
         if 'store_hist' in callback_names:
                  all_callbacks.append(tf.keras.callbacks.CSVLogger(f'../CFRNN_storage/train_logs/log_{self.model_id }',
@@ -143,66 +143,6 @@ class CFRNN:
             all_models.to_pickle(path)
             
         return all_models
-
-
-    def get_predictions(self, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False):
-        """
-        Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
-        Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
-        from the left_out df
-        :param test_set: Test or Validation set (pandas)
-        :param left_out_items: left out items (pandas)
-        :param batch_size: batch_size==number of test users
-        :param pad_value: (mask_value) pad_value==total_items (as done while training)
-        :param rank_at: maximum number of predictions to make
-        :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
-                 true_id extracted from test_set (as input for Evaluation.get_metrics
-        """
-        self.batch_size = None
-        self.build_model(ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
-            
-        n_batches = int(len(left_out_items) / batch_size)
-        data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
-        data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, self.pad_value, eval=True, stats=False)
-        data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
-
-        # Extend final predictions with predictions made on batches
-        final_preds = []
-        for split in data_seqs_splits:
-            final_preds.extend(self.make_predictions(split, rank_at))
-
-        # Get True items
-        test_left_out_items = left_out_items.groupby('user_id')['item_id'].apply(list)
-
-        preds_df = pd.DataFrame(list(zip(test_left_out_items.index, final_preds, list(test_left_out_items))),
-                                columns=['user', 'pred_items_ranked', 'true_id'])
-
-        return preds_df
-
-
-    def make_predictions(self, user_sequences, rank_at):
-        """
-        :param model:
-        :param user_sequences:
-        :param rank_at:
-        :return:
-        """
-        final_preds = np.zeros((user_sequences.shape[0], rank_at), dtype='int32')
-        for i in range(rank_at):
-            predictions = self.model.predict(user_sequences)
-            for u_index, prediction in enumerate(predictions):
-                pred_item_id = np.argmax(prediction)
-                final_preds[u_index][i] = pred_item_id
-
-                padding_values = np.where(user_sequences[u_index] == self.pad_value)[0]
-                if padding_values.shape[0] > 0:
-                    first_pad_value = np.min(padding_values)
-                    user_sequences[u_index][first_pad_value] = pred_item_id
-                else:
-                    new_user_sequence = np.append(user_sequences[u_index], pred_item_id)[1:]
-                    user_sequences[u_index] = new_user_sequence
-                    
-        return final_preds
 
     
     def recall_metric(self):
@@ -320,6 +260,111 @@ class CFRNN:
         return remaining_set, n_set
 
     
+    def get_predictions(self, train_set, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False):
+        """
+        Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
+        Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
+        from the left_out df
+        :param test_set: Test or Validation set (pandas)
+        :param left_out_items: left out items (pandas)
+        :param batch_size: batch_size==number of test users
+        :param pad_value: (mask_value) pad_value==total_items (as done while training)
+        :param rank_at: maximum number of predictions to make
+        :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+                 true_id extracted from test_set (as input for Evaluation.get_metrics
+        """
+        self.batch_size = None
+        self.build_model(ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
+            
+        n_batches = int(len(left_out_items) / batch_size)
+        data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
+        data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, self.pad_value, eval=True, stats=False)
+        data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
+        
+        already_seen = pd.concat([train_set, test_set]).groupby('user_id')['item_id'].apply(list)
+        # Get True items
+        test_left_out_items = left_out_items.groupby('user_id')['item_id'].apply(list)
+        
+        # Extend final predictions with predictions made on batches
+        preds = []
+        for split in data_seqs_splits:
+            preds.extend(self.model.predict(split))
+        
+        # Exclude alredy seen items
+        final_preds = []
+        
+        for user, pred in zip(test_left_out_items.index, preds):
+            pred[already_seen[user]] = -np.inf
+            ids = np.argpartition(pred, -rank_at)[-rank_at:]
+            final_preds.append(ids[np.argsort(pred[ids][::-1])])
+            
+        preds_df = pd.DataFrame(list(zip(test_left_out_items.index, final_preds, list(test_left_out_items))),
+                                columns=['user', 'pred_items_ranked', 'true_id'])
+
+        return preds_df
+
+##################################################################################
+    
+#     def get_predictions(self, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False):
+#         """
+#         Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
+#         Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
+#         from the left_out df
+#         :param test_set: Test or Validation set (pandas)
+#         :param left_out_items: left out items (pandas)
+#         :param batch_size: batch_size==number of test users
+#         :param pad_value: (mask_value) pad_value==total_items (as done while training)
+#         :param rank_at: maximum number of predictions to make
+#         :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+#                  true_id extracted from test_set (as input for Evaluation.get_metrics
+#         """
+#         self.batch_size = None
+#         self.build_model(ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
+            
+#         n_batches = int(len(left_out_items) / batch_size)
+#         data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
+#         data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, self.pad_value, eval=True, stats=False)
+#         data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
+        
+#         # Extend final predictions with predictions made on batches
+#         final_preds = []
+#         for split in data_seqs_splits:
+#             final_preds.extend(self.make_predictions(split, rank_at))
+
+#         # Get True items
+#         test_left_out_items = left_out_items.groupby('user_id')['item_id'].apply(list)
+
+#         preds_df = pd.DataFrame(list(zip(test_left_out_items.index, final_preds, list(test_left_out_items))),
+#                                 columns=['user', 'pred_items_ranked', 'true_id'])
+
+#         return preds_df
+
+
+#     def make_predictions(self, user_sequences, rank_at):
+#         """
+#         :param model:
+#         :param user_sequences:
+#         :param rank_at:
+#         :return:
+#         """
+#         final_preds = np.zeros((user_sequences.shape[0], rank_at), dtype='int32')
+#         for i in range(rank_at):
+#             predictions = self.model.predict(user_sequences)
+#             for u_index, prediction in enumerate(predictions):
+#                 pred_item_id = np.argmax(prediction)
+#                 final_preds[u_index][i] = pred_item_id
+
+#                 padding_values = np.where(user_sequences[u_index] == self.pad_value)[0]
+#                 if padding_values.shape[0] > 0:
+#                     first_pad_value = np.min(padding_values)
+#                     user_sequences[u_index][first_pad_value] = pred_item_id
+#                 else:
+#                     new_user_sequence = np.append(user_sequences[u_index], pred_item_id)[1:]
+#                     user_sequences[u_index] = new_user_sequence
+                    
+#         return final_preds
+
+    # TODO: add store_path
     def plot_training(self):
         his = self.history.history
         
