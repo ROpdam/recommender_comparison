@@ -211,6 +211,18 @@ def split_df_by_users(df, left_out_items, n_splits):
 
     return df_splits, left_out_items_split
 
+
+def leave_last_x_out_2(df, n_items=1):
+    leave_out_indices = []
+    for u in df.user_id.unique():
+        df_user = df[df.user_id == u]
+        leave_out_indices.extend(df_user.iloc[-1:].index)
+    leave_out = df.loc[leave_out_indices]
+    remaining = df.drop(leave_out_indices)
+    
+    return remaining, leave_out
+    
+    
 ############################################# NOT NEEDED ANYMORE ######################################################
 # def min_padding(sequences, batch_size, min_len, max_len):
 #     """
