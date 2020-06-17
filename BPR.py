@@ -50,6 +50,8 @@ class BPR():
                         (if val_set provided)
         :return: -None: stores values in self.model
         """
+        print(f'Training BPR on {self.n_iterations} samples of size {self.sample_size}')
+        
         # Seed
         if self.seed > 0:
             np.random.seed(self.seed)
@@ -238,7 +240,7 @@ class BPR():
         df_results.to_pickle(log_path + res_name)
 
 
-    def get_predictions(self, test_set, rank_at=20, stats=True):
+    def get_predictions(self, train_set, test_set, rank_at=20, stats=True, exclude_already_seen=True):
         """
         The provided MF model is used to obtain values for all items per user from the test set
         and rank at rank_at per user, finally the true items are put together in the ranked_df result
@@ -252,16 +254,20 @@ class BPR():
         s = time.time()
         test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
         test_users = test_user_items.index
-
+        
+        if exclude_already_seen:
+            already_seen = train_set.groupby('user_id')['item_id'].apply(list)
+            
         pred_items_ranked = []
         true_items_list = []
-
         for u in test_users:
             true_items = []
             for true_item in test_user_items.loc[u]:
                 true_items.append(true_item)
 
             predictions = np.dot(self.model['p'][u], self.model['q'].T)
+            if exclude_already_seen:
+                predictions[already_seen[u]] = -np.inf
             ids = np.argpartition(predictions, -rank_at)[-rank_at:]
             best_ids = np.argsort(predictions[ids])[::-1]
             best = ids[best_ids]
@@ -279,11 +285,12 @@ class BPR():
         return ranked_df
     
     
-    def sample_prediction(self, train_set, test_set, sample_len=100, rank_at=20):
+    def sample_prediction(self, train_set, test_set, sample_len=100, rank_at=20, exclude_already_seen=True):
         user_items = train_set.groupby('user_id')['item_id'].apply(list)
         test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
         train_items = train_set.item_id.unique()
-
+        if exclude_already_seen:
+            already_seen = train_set.groupby('user_id')['item_id'].apply(list)                    
         preds_ranked = []
         true_items = []
         pbar = progressbar.ProgressBar()
@@ -295,6 +302,8 @@ class BPR():
             total_sample = np.append(neg_sample, true_item)
             user_array = np.full(len(total_sample), u, dtype='int32')
             preds = np.dot(self.model['p'][u], self.model['q'][total_sample].T)
+            if exclude_already_seen:
+                preds[already_seen[u]] = -np.inf
             ids = np.argpartition(preds, -rank_at)[-rank_at:]
             best_ids = np.argsort(preds[ids])[::-1]
             best = total_sample[ids[best_ids]]

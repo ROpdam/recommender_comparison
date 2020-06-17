@@ -408,19 +408,25 @@ class NCF:
         self.NeuMF.get_layer('prediction').set_weights([alpha*new_weights, (1-alpha)*new_b])    
         
         
-    def get_predictions(self, name, test_set, rank_at=20):
+    def get_predictions(self, name, train_set, test_set, rank_at=20, exclude_already_seen=True):
         """
         """
         model, _ = self.get_model(name)
         test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
-        pbar = progressbar.ProgressBar()
+        if exclude_already_seen:
+            already_seen = train_set.groupby('user_id')['item_id'].apply(list)
+            
         preds_ranked = []
         true_items = []
+        pbar = progressbar.ProgressBar()
         for u in pbar(test_user_items.index):
             true_items.append(test_user_items[u])
             user_array = np.full(self.total_items, u, dtype='int32')
             total_sample = np.arange(self.total_items)
             preds = np.hstack(model.predict([user_array, total_sample], batch_size=self.total_items, verbose=0))
+            if exclude_already_seen:
+                preds[already_seen[u]] = -np.inf
+                
             ids = np.argpartition(preds, -rank_at)[-rank_at:]
             best_ids = np.argsort(preds[ids])[::-1]
             best = total_sample[ids[best_ids]]
@@ -431,17 +437,20 @@ class NCF:
         return ranked_df
         
     
-    def sample_prediction(self, name, train, test, train_items=[], val=False, sample_len=100, rank_at=20):
+    def sample_prediction(self, name, train_set, test_set, train_items=[], val=False, sample_len=100, rank_at=20):
         """
         """
         model, _ = self.get_model(name)
         if not val:
-            user_items = train.groupby('user_id')['item_id'].apply(list)
-            test_user_items = test.groupby('user_id')['item_id'].apply(list)
-            train_items = train.item_id.unique()
+            user_items = train_set.groupby('user_id')['item_id'].apply(list)
+            test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+            train_items = train_set.item_id.unique()
         else:
             user_items = train
             test_user_items = test
+            
+        if exclude_already_seen:
+            already_seen = train_set.groupby('user_id')['item_id'].apply(list)
             
         preds_ranked = []
         true_items = []
@@ -456,7 +465,9 @@ class NCF:
             user_array = np.full(len(total_sample), u, dtype='int32')
 
             preds = np.hstack(model.predict([user_array, total_sample], batch_size=sample_len, verbose=0))
-#             best = total_sample[np.argsort(preds)][-rank_at:][::-1]
+            if exclude_already_seen:
+                preds[already_seen[u]] = -np.inf
+                
             ids = np.argpartition(preds, -rank_at)[-rank_at:]
             best_ids = np.argsort(preds[ids])[::-1]
             best = total_sample[ids[best_ids]]

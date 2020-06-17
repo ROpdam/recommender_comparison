@@ -63,7 +63,7 @@ class CFRNN:
         ])
         
         if len(ckpt_dir) > 0:
-            model.load_weights(tf.train.latest_checkpoint(ckpt_dir)).expect_partial()
+            model.load_weights(ckpt_dir).expect_partial()
         
         self.model = model
         
@@ -82,9 +82,9 @@ class CFRNN:
                                                          save_weights_only = True))
             
         if 'early_stopping' in callback_names:
-            all_callbacks.append(tf.keras.callbacks.EarlyStopping(monitor = 'val_recall',
+            all_callbacks.append(tf.keras.callbacks.EarlyStopping(monitor = 'loss',
                                                            min_delta = 0.0001,
-                                                           mode = 'max',
+                                                           mode = 'min',
                                                            patience = patience))
             
 #         if 'store_hist' in callback_names:
@@ -258,7 +258,7 @@ class CFRNN:
         return remaining_set, n_set
 
     
-    def get_predictions(self, train_set, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False):
+    def get_predictions(self, train_set, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False, exclude_already_seen=True):
         """
         Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
         Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
@@ -278,8 +278,9 @@ class CFRNN:
         data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
         data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, self.pad_value, eval=True, stats=False)
         data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
-        
-        already_seen = pd.concat([train_set, test_set]).groupby('user_id')['item_id'].apply(list)
+        if exclude_already_seen:
+            already_seen = pd.concat([train_set, test_set]).groupby('user_id')['item_id'].apply(list)
+            
         # Get True items
         test_left_out_items = left_out_items.groupby('user_id')['item_id'].apply(list)
         
@@ -292,7 +293,8 @@ class CFRNN:
         final_preds = []
         
         for user, pred in zip(test_left_out_items.index, preds):
-            pred[already_seen[user]] = -np.inf
+            if exclude_already_seen:
+                pred[already_seen[user]] = -np.inf
             ids = np.argpartition(pred, -rank_at)[-rank_at:]
             final_preds.append(ids[np.argsort(pred[ids][::-1])])
             
