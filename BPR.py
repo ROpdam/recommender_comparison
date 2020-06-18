@@ -67,10 +67,10 @@ class BPR():
         else:
             all_uij_samples = np.load(sample_path)
         
-        self.fit(all_uij_samples, val_set, verbose)
+        self.fit(all_uij_samples, train_set, val_set, verbose)
         
         
-    def fit(self, all_uij_samples, val_set, verbose):
+    def fit(self, all_uij_samples, train_set, val_set, verbose):
         """
         """
         # Init user, item matrices and time
@@ -118,7 +118,7 @@ class BPR():
 #                 val_auc = self.AUC()
 #                 self.model['val_auc'].append(val_auc)
 
-                val_predictions = self.get_predictions(test_set=val_set, stats=False)
+                val_predictions = self.get_predictions(train_set=train_set, test_set=val_set, stats=False)
                 val_metrics = get_metrics(val_predictions, stats=False)
                 val_rec_list.append(val_metrics['recall'].iloc[2])
             

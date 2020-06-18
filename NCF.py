@@ -229,7 +229,7 @@ class NCF:
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
     
     
-    def train_model(self, name, samples=[], val_set=[], verbose=1):
+    def train_model(self, name, samples=[], train_set=[], val_set=[], verbose=1):
         """
         """
         model, params = self.get_model(name)
@@ -244,14 +244,14 @@ class NCF:
         if len(samples) == 0:
             raise Exception('No samples available, create samples first using: create_samples')
         
-        val_metrics = self.fit(model, params, samples, val_set, verbose)
+        val_metrics = self.fit(model, params, samples, train_set, val_set, verbose)
         
         model.save_weights(params['weights_dir'])
 
         return val_metrics
 
     
-    def fit(self, model, params, samples, val_set, verbose):
+    def fit(self, model, params, samples, train_set, val_set, verbose):
         """
         """
         if verbose == 1:
@@ -279,7 +279,7 @@ class NCF:
 #                 sample_metrics = get_metrics(ranked_sample_df, stats=False)
 #                 val_metrics.append(sample_metrics)
 #                 print(sample_metrics)
-                ranked_df = self.get_predictions(model._name, val_set)
+                ranked_df = self.get_predictions(model._name, train_set, val_set)
                 val_metrics.append(get_metrics(ranked_df, stats=False))
                 print(val_metrics[-1:])
 #                 plt.plot(np.average(self.get_raw_predictions(model._name, train_set, val_set), axis=0))

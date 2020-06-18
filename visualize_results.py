@@ -1,11 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def plot_metrics(metrics, plot_title, legend_names, size=(10,8), path='', ndcg=True):
+def plot_metrics(metrics, legend_names, plot_title='', size=(10,8), store_path='', ndcg=True):
     ranks_at = metrics[0]['rank_at']
     
     figure, axes = plt.subplots(nrows=2, ncols=2, figsize=size)
-    figure.suptitle(plot_title)
+    if len(plot_title) > 0:
+        figure.suptitle(plot_title)
     figure.subplots_adjust(wspace=0.4, hspace=0.4)
         
     bar_width = 1.0
@@ -64,6 +65,6 @@ def plot_metrics(metrics, plot_title, legend_names, size=(10,8), path='', ndcg=T
     
     figure.legend(legend_names, loc='lower center', ncol=len(legend_names), fontsize='large')
     
-    if len(path) > 0:
-        figure.savefig(path)
+    if len(store_path) > 0:
+        figure.savefig(store_path)
     plt.show()
