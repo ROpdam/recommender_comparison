@@ -30,10 +30,10 @@ class BPR():
         self.sigma = params['sigma']
         self.reg_user = params['reg_user']
         self.reg_item = params['reg_item']
-        self.alpha_decay = self.alpha / self.n_iterations
 
-        self.model = {}
+        self.model = {'val_rec@10':[], 'learning_rate':[], 'train_loss':[]}
         self.model['val_auc'] = []
+        
         self.user_items = pd.DataFrame()
         self.train_users = []
         self.train_items = []
@@ -41,7 +41,7 @@ class BPR():
         self.val_user_items = pd.DataFrame()
         self.val_users = []
 
-    def train_model(self, train_set=[], val_set=[], sample_path='', verbose=1):
+    def train_model(self, train_set=[], val_set=[], sample_path='', verbose=1, patience=4, save_best=True):
         """
         Fit BPR to the train_set, if val_set is provided the AUC metrics will be computed and printed per iteration
         :param train_set: pandas df containing user_id and item_id
@@ -52,7 +52,7 @@ class BPR():
         """
         print(f'Training BPR on {self.n_iterations} samples of size {self.sample_size}')
         
-        # Seed
+        ## Set seed
         if self.seed > 0:
             np.random.seed(self.seed)
 
@@ -67,10 +67,10 @@ class BPR():
         else:
             all_uij_samples = np.load(sample_path)
         
-        self.fit(all_uij_samples, train_set, val_set, verbose)
+        self.fit(all_uij_samples, train_set, val_set, verbose, patience, save_best)
         
         
-    def fit(self, all_uij_samples, train_set, val_set, verbose):
+    def fit(self, all_uij_samples, train_set, val_set, verbose, patience, save_best):
         """
         """
         # Init user, item matrices and time
@@ -81,6 +81,9 @@ class BPR():
         loss_list = []
         val_rec_list = []
         alphas = []
+        best_p = p
+        best_q = q
+        pat = patience
         
         # Training Loop
         for iteration in range(self.n_iterations):
@@ -109,36 +112,54 @@ class BPR():
                 p[u] += self.alpha * (diff_deriv * (q[i] - q[j]) - self.reg_user * p[u])
                 q[i] += self.alpha * (diff_deriv * p[u] - self.reg_item * q[i])
                 q[j] += self.alpha * (diff_deriv * (-p[u]) - self.reg_item * q[j])
-
+            
             ## Store iteration variables
             self.model['p'] = p
             self.model['q'] = q
-
+            
+            ##################################### Update #################################################
             if len(val_set) > 0:  # TODO: safe best & early stopping
 #                 val_auc = self.AUC()
 #                 self.model['val_auc'].append(val_auc)
 
                 val_predictions = self.get_predictions(train_set=train_set, test_set=val_set, stats=False)
                 val_metrics = get_metrics(val_predictions, stats=False)
-                val_rec_list.append(val_metrics['recall'].iloc[2])
-            
+                
+                val_rec_10 = val_metrics['recall'].iloc[2]
+                if save_best and iteration > 0 and val_rec_10 > max(self.model['val_rec@10']):
+                    best_p = p
+                    best_q = q
+                    pat = patience #Back to normal after better val score
+#                     print('best updated')
+                    
+                elif save_best and iteration > 0:
+#                     print('no improvement')
+                    pat -= 1
+                
+                self.model['val_rec@10'].append(val_rec_10)
+                
+                if pat == 0:
+                    self.model['p'] = best_p
+                    self.model['q'] = best_q
+                    print(f'Early Stopping, no improvement for {patience} iterations')
+                    break
+                
                 if verbose == 1:
-                    print('iteration:', iteration, ' loss:', round(it_loss, 6), ' rec@10:',val_metrics['recall'].iloc[2])  
+                    print('iteration:', iteration, ' loss:', round(it_loss, 6), ' val_rec@10:', val_rec_10)  
             elif verbose == 1:
                 print('iteration:', iteration, ' loss:', round(it_loss, 6))
-
+            
             if iteration > 0:
-                self.update_alpha(loss_list[-1], it_loss)
-
-            alphas.append(self.alpha)
-            loss_list.append(it_loss)
-
-        # Store train values
-        train_time = time.time() - s
-        self.model['train_time'] = train_time
-        self.model['val_rec@10'] = val_rec_list
-        self.model['train_loss'] = loss_list
-        self.model['learning_rate'] = alphas
+                self.update_alpha(self.model['train_loss'][-1], it_loss)
+            
+            self.model['learning_rate'].append(self.alpha)
+            self.model['train_loss'].append(it_loss)
+                
+        self.model['train_time'] = time.time() - s
+        
+        if save_best:
+            self.model['p'] = best_p
+            self.model['q'] = best_q
         
         
     def create_samples(self, train_set=[]):
@@ -207,7 +228,7 @@ class BPR():
         return auc
 
     
-    def store_model(self, log_path, res_name, file_name, stats=True):
+    def store_model(self, log_path, res_name, file_name, stats=True, gs=False):
         """
         Store the model as a row in a pandas df (pickle) named res_name, stores: train loss, val_auc, train_time,
         learning_rates, file_name, p and q factors
@@ -218,11 +239,17 @@ class BPR():
         :param stats: print whether new results are created or the current model is added to an existing pandas df
         :return: -None:
         """
-        result_info = {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'], 
-                       'val_rec@10': self.model['val_rec@10'], 'train_speed': self.model['train_time'], 
-                       'lr': self.model['learning_rate'], 'file': file_name}
-        other_info = {'p': self.model['p'],
-                      'q': self.model['q']}  # 'train_size':train_size, 'test_size':test_size, 'val_size':val_size}
+        if gs:
+            self.model['p'] = 0
+            self.model['q'] = 0
+            
+        result_info = self.model
+# #         {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'], 
+# #                        'val_rec@10': self.model['val_rec@10'], 'train_speed': self.model['train_time'], 
+# #                        'lr': self.model['learning_rate'], 'file': file_name}
+#         other_info = {'p': self.model['p'],
+#                       'q': self.model['q'],
+        other_info = {'file': file_name}  # 'train_size':train_size, 'test_size':test_size, 'val_size':val_size}
         final_log = dict(result_info, **self.params, **other_info)
 
         if not os.path.exists(log_path + res_name):
