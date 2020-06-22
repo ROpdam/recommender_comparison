@@ -99,13 +99,18 @@ class BPR():
                 diff = np.dot(p[u], (q[i] - q[j]).T)
 
                 ## Obtain loss
-                loss_value = - np.log(self.sigmoid(diff))
+                sigmoid_diff = self.sigmoid(diff)
+                if sigmoid_diff == 'overflow':
+                    break
+                loss_value = - np.log(sigmoid_diff)
                 regulariser = self.reg_user * np.dot(p[u], p[u]) + self.reg_item * np.dot(q[i], q[
                     i]) + self.reg_item / 10 * np.dot(q[j], q[j])
                 it_loss += (loss_value + regulariser) / self.sample_size
 
                 ## Derivative of the difference for update
                 diff_deriv = self.sigmoid(- diff)
+                if diff_deriv == 'overflow':
+                    break
 
                 ## Update the factors of the latent features, using their respective derivatives
                 ## See http://ethen8181.github.io/machine-learning/recsys/4_bpr.html
@@ -141,7 +146,7 @@ class BPR():
                 if pat == 0:
                     self.model['p'] = best_p
                     self.model['q'] = best_q
-                    print(f'Early Stopping, no improvement for {patience} iterations')
+                    print(f'Early Stopping, no improvement for {patience} iterations at iteration {iteration}')
                     break
                 
                 if verbose == 1:
@@ -193,7 +198,11 @@ class BPR():
 
     
     def sigmoid(self, x):
-        return 1 / (1 + math.exp(-x))
+        try:
+            return 1 / (1 + math.exp(-x))
+        except OverflowError:
+            return 'overflow'
+        
 
     
     def update_alpha(self, last_loss, it_loss):
