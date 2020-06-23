@@ -508,3 +508,33 @@ class NCF:
 
          
         return all_preds
+    
+    
+    def store_model(self, path, additional_info={}, store=True):
+        """
+        Storing the trained and/or tested LSTM model in:
+        1. An existing pandas dataframe if it already exists in path
+        2. A new pandas dataframe
+        :param path: Where to store / add this dataframe with the existing model
+        :param params: Parameters used for the model
+        :param history: Training History of the model
+        :param train_time: Elapsed train time of the model
+        :param eval_metrics: Prediction Metrics
+        :param store: Whether to actually store the df or return the df
+        :return: all_models dataframe which keeps track of:
+        TODO: Fill in list of columns from all_models
+        """
+
+        final_results = {**additional_info, **self.history, **self.params}
+
+        if os.path.exists(path):
+            all_models = pd.read_pickle(path)
+            all_models = all_models.append(final_results, ignore_index=True)
+        else:
+            all_models = pd.DataFrame(columns=final_results.keys())
+            all_models = all_models.append(final_results, ignore_index=True)
+
+        if store:
+            all_models.to_pickle(path)
+            
+#         return all_models
