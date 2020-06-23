@@ -77,9 +77,9 @@ class CFRNN:
         if 'checkpoint' in callback_names:
             all_callbacks.append(tf.keras.callbacks.ModelCheckpoint(filepath = self.ckpt_dir,    
                                                          monitor = 'loss',    
-                                                         mode = 'min',    
-                                                         save_best_only = True,
-                                                         save_weights_only = True))
+                                                         mode = 'min',   
+                                                         save_weights_only = True,
+                                                         period = 10))
             
         if 'early_stopping' in callback_names:
             all_callbacks.append(tf.keras.callbacks.EarlyStopping(monitor = 'loss',
