@@ -68,3 +68,28 @@ def plot_metrics(metrics, legend_names, plot_title='', size=(10,8), store_path='
     if len(store_path) > 0:
         figure.savefig(store_path)
     plt.show()
+    
+    
+def plot_final_metrics(all_final_results, colors, labels, metrics_to_show, add_to_title, size=(26,12)):
+    fig, ax = plt.subplots(figsize=size, nrows=1, ncols=2)
+
+    for final_r, color, label in zip(all_final_results, colors, labels):
+        for i, metric_ts in enumerate(metrics_to_show):
+            ax[i].plot(final_r['rank_at'], final_r[f'{metric_ts}_mean'], lw=2, label=label, color=color)
+            ax[i].fill_between(final_r['rank_at'], 
+                            final_r[f'{metric_ts}_mean']+final_r[f'{metric_ts}_std'], 
+                            final_r[f'{metric_ts}_mean']-final_r[f'{metric_ts}_std'], 
+                            facecolor='blue', alpha=0.5)
+            ax[i].set_xticks(final_r['rank_at'])
+            ax[i].set_xlabel('Rank@', fontsize=30)
+            ax[i].tick_params(axis='both', which='major', labelsize=25)
+
+
+
+    ax[0].set_title('Recall ' + add_to_title, fontsize=30)
+    ax[0].set_ylabel('Recall', fontsize=30)
+    
+    ax[1].set_title('NDCG ' + add_to_title, fontsize=30)
+    ax[1].set_ylabel('NDCG', fontsize=30)
+    
+    fig.legend(labels, loc='lower center', ncol=len(labels), fontsize=25, bbox_to_anchor = [0.45,-0.012])

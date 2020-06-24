@@ -237,7 +237,7 @@ class BPR():
         return auc
 
     
-    def store_model(self, log_path, res_name, file_name, stats=True, gs=False):
+    def store_model(self, log_path, res_name, other_info, stats=True, gs=False):
         """
         Store the model as a row in a pandas df (pickle) named res_name, stores: train loss, val_auc, train_time,
         learning_rates, file_name, p and q factors
@@ -253,13 +253,7 @@ class BPR():
             self.model['q'] = 0
             
         result_info = self.model
-# #         {'train_loss': self.model['train_loss'], 'val_auc': self.model['val_auc'], 
-# #                        'val_rec@10': self.model['val_rec@10'], 'train_speed': self.model['train_time'], 
-# #                        'lr': self.model['learning_rate'], 'file': file_name}
-#         other_info = {'p': self.model['p'],
-#                       'q': self.model['q'],
-        other_info = {'file': file_name}  # 'train_size':train_size, 'test_size':test_size, 'val_size':val_size}
-        final_log = dict(result_info, **self.params, **other_info)
+        final_log = {**other_info, **self.model, **self.params}
 
         if not os.path.exists(log_path + res_name):
             df_results = pd.DataFrame(columns=final_log.keys())
