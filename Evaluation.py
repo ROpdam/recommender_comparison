@@ -86,7 +86,7 @@ def get_final_results(res_path):
     
     ## Create avg losses and val_rec@10 per epoch and avg train_time
     loss_df = pd.DataFrame(res['train_loss'])['train_loss'].apply(pd.Series)
-    val_df = pd.DataFrame(res['val_rec@10'])['val_rec@10'].apply(pd.Series)
+    val_df = pd.DataFrame(res['all_val_rec@10'])['all_val_rec@10'].apply(pd.Series)
     train_time_dict = {'train_time_mean': res['train_time'].mean(), 'train_time_std':res['train_time'].std()}
     
     other_stats = {'loss_mean':loss_df.mean(axis=1), 

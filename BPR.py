@@ -31,7 +31,7 @@ class BPR():
         self.reg_user = params['reg_user']
         self.reg_item = params['reg_item']
 
-        self.model = {'val_rec@10':[], 'learning_rate':[], 'train_loss':[]}
+        self.model = {'all_val_rec@10':[], 'learning_rate':[], 'train_loss':[]}
         self.model['val_auc'] = []
         
         self.user_items = pd.DataFrame()
@@ -55,6 +55,8 @@ class BPR():
         ## Set seed
         if self.seed > 0:
             np.random.seed(self.seed)
+        else:
+            self.model['seed'] = 'random'
 
         ## Used for validating
         if len(val_set) > 0:
@@ -131,7 +133,7 @@ class BPR():
                 val_metrics = get_metrics(val_predictions, stats=False)
                 
                 val_rec_10 = val_metrics['recall'].iloc[2]
-                if save_best and iteration > 0 and val_rec_10 > max(self.model['val_rec@10']):
+                if save_best and iteration > 0 and val_rec_10 > max(self.model['all_val_rec@10']):
                     best_p = p
                     best_q = q
                     pat = patience #Back to normal after better val score
@@ -141,7 +143,7 @@ class BPR():
 #                     print('no improvement')
                     pat -= 1
                 
-                self.model['val_rec@10'].append(val_rec_10)
+                self.model['all_val_rec@10'].append(val_rec_10)
                 
                 if pat == 0:
                     self.model['p'] = best_p
@@ -237,7 +239,7 @@ class BPR():
         return auc
 
     
-    def store_model(self, log_path, res_name, other_info, stats=True, gs=False):
+    def store_model(self, log_path, res_name, other_info={}, stats=True, gs=False):
         """
         Store the model as a row in a pandas df (pickle) named res_name, stores: train loss, val_auc, train_time,
         learning_rates, file_name, p and q factors
@@ -252,7 +254,6 @@ class BPR():
             self.model['p'] = 0
             self.model['q'] = 0
             
-        result_info = self.model
         final_log = {**other_info, **self.model, **self.params}
 
         if not os.path.exists(log_path + res_name):
