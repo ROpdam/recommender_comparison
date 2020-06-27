@@ -140,7 +140,7 @@ class NCF:
         
         self.compile_model(model._name)
 
-    #TODO: Implement keras normal initializers to pick seed yourself
+        
     def build_NeuMF_model(self):
         """
         """

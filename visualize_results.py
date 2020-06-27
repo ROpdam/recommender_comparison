@@ -52,6 +52,7 @@ def plot_train_stats(dfs, color, size=(26,12), store_path=''):
     
     if len(store_path) > 0:
         fig.savefig(store_path)
+
         
 def plot_train_stats(dfs, color, size=(26,12), store_path=''):
     """
