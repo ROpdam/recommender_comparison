@@ -63,11 +63,9 @@ def getNDCG(ranklist, true_item):
     return 0
 
 
-def get_final_results(res_path):
+def get_final_results(res):
     """
     """
-    res = pd.read_pickle(res_path)
-    
     # Create avg and std of metrics
     all_metrics = {'recall':pd.DataFrame() , 'hitcounts':pd.DataFrame() , 'ndcg':pd.DataFrame()}
     metrics_mean_std = {'recall_mean':[] , 'hitcounts_mean':[] , 'ndcg_mean':[], 'recall_std':[] , 'hitcounts_std':[] , 'ndcg_std':[]}
@@ -89,9 +87,9 @@ def get_final_results(res_path):
     val_df = pd.DataFrame(res['all_val_rec@10'])['all_val_rec@10'].apply(pd.Series)
     train_time_dict = {'train_time_mean': res['train_time'].mean(), 'train_time_std':res['train_time'].std()}
     
-    other_stats = {'loss_mean':loss_df.mean(axis=1), 
-                   'val_rec@10_mean': val_df.mean(axis=1),
-                   'loss_std':loss_df.std(axis=1),
-                   'val_rec@10_std':val_df.std(axis=1)}
+    other_stats = {'loss_mean':loss_df.mean(axis=0, skipna=True), 
+                   'val_rec@10_mean': val_df.mean(axis=0, skipna=True),
+                   'loss_std':loss_df.std(axis=0, skipna=True),
+                   'val_rec@10_std':val_df.std(axis=0, skipna=True)}
             
     return final_metrics, pd.DataFrame(other_stats), pd.DataFrame(train_time_dict, index=[0])
