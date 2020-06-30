@@ -31,7 +31,8 @@ class BPR():
         self.reg_user = params['reg_user']
         self.reg_item = params['reg_item']
 
-        self.model = {'all_val_rec@10':[], 'learning_rate':[], 'train_loss':[]}
+        self.model = {'all_val_rec@10':[], 'all_val_ndcg@10':[], 'val_metrics':[],
+                      'learning_rate':[], 'train_loss':[]}
         self.model['val_auc'] = []
         
         self.user_items = pd.DataFrame()
@@ -144,6 +145,8 @@ class BPR():
                     pat -= 1
                 
                 self.model['all_val_rec@10'].append(val_rec_10)
+                self.model['all_val_ndcg@10'].append(val_metrics['ndcg'].iloc[2])
+                self.model['val_metrics'].append(val_metrics)
                 
                 if pat == 0:
                     self.model['p'] = best_p

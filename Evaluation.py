@@ -84,12 +84,15 @@ def get_final_results(res):
     
     ## Create avg losses and val_rec@10 per epoch and avg train_time
     loss_df = pd.DataFrame(res['train_loss'])['train_loss'].apply(pd.Series)
-    val_df = pd.DataFrame(res['all_val_rec@10'])['all_val_rec@10'].apply(pd.Series)
+    val_rec_df = pd.DataFrame(res['all_val_rec@10'])['all_val_rec@10'].apply(pd.Series)
+    val_ndcg_df = pd.DataFrame(res['all_val_ndcg@10'])['all_val_ndcg@10'].apply(pd.Series)
     train_time_dict = {'train_time_mean': res['train_time'].mean(), 'train_time_std':res['train_time'].std()}
     
     other_stats = {'loss_mean':loss_df.mean(axis=0, skipna=True), 
-                   'val_rec@10_mean': val_df.mean(axis=0, skipna=True),
+                   'val_rec@10_mean': val_rec_df.mean(axis=0, skipna=True),
+                   'val_ndcg@10_mean': val_ndcg_df.mean(axis=0, skipna=True),
                    'loss_std':loss_df.std(axis=0, skipna=True),
-                   'val_rec@10_std':val_df.std(axis=0, skipna=True)}
+                   'val_rec@10_std':val_rec_df.std(axis=0, skipna=True),
+                   'val_ndcg@10_std':val_ndcg_df.std(axis=0, skipna=True)}
             
     return final_metrics, pd.DataFrame(other_stats), pd.DataFrame(train_time_dict, index=[0])

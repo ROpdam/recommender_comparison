@@ -2,80 +2,82 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
     
-def plot_final_metrics(all_final_results, colors, labels, metrics_to_show, add_to_title, size=(26,12), store_path=''):
-    """
-    """
-    fig, ax = plt.subplots(figsize=size, nrows=1, ncols=2)
+def plot_final_metrics(final_results,file_name, colors, metrics_to_show, y_labels, title, size=(26,12), store_path=''):
+    fig, ax = plt.subplots(figsize=size, nrows=1, ncols=len(metrics_to_show))
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.2, hspace=0.4)
 
-    for final_r, color, label in zip(all_final_results, colors, labels):
+    for label, color in zip(final_results.keys(), colors):
         for i, metric_ts in enumerate(metrics_to_show):
-            ax[i].plot(final_r['rank_at'], final_r[f'{metric_ts}_mean'], lw=2, label=label, color=color)
-            ax[i].fill_between(final_r['rank_at'], 
-                            final_r[f'{metric_ts}_mean']+final_r[f'{metric_ts}_std'], 
-                            final_r[f'{metric_ts}_mean']-final_r[f'{metric_ts}_std'], 
+            df = final_results[label]['metrics'][file_name]
+            metric_mean = df[f'{metric_ts}_mean']
+            metric_std = df[f'{metric_ts}_std']
+            rank_at = df['rank_at']
+
+            ax[i].plot(rank_at, metric_mean, lw=2, label=label, color=color)
+            ax[i].set_title(file_name)
+            ax[i].fill_between(rank_at, 
+                            metric_mean + metric_std, 
+                            metric_mean - metric_std, 
                             facecolor=color, alpha=0.5)
-            ax[i].set_xticks(final_r['rank_at'])
+
+            ax[i].set_title(f'{y_labels[i]} {title}', fontsize=30)
+            ax[i].set_xticks(rank_at)
             ax[i].set_xlabel('Rank@', fontsize=30)
+            ax[i].set_ylabel(y_labels[i], fontsize=30)
             ax[i].tick_params(axis='both', which='major', labelsize=25)
 
-    ax[0].set_title('Recall ' + add_to_title, fontsize=30)
-    ax[0].set_ylabel('Recall', fontsize=30)
-    
-    ax[1].set_title('NDCG ' + add_to_title, fontsize=30)
-    ax[1].set_ylabel('NDCG', fontsize=30)
-    
-    fig.legend(labels, loc='lower center', ncol=len(labels), fontsize=25, bbox_to_anchor = [0.45,-0.012])
-    
-    if len(store_path) > 0:
-        fig.savefig(store_path)
-        
-        
-def plot_train_stats(dfs, color, size=(26,12), store_path=''):
-    """
-    """
-    fig, ax = plt.subplots(figsize=size, nrows=1, ncols=2)
-    to_plot = ['loss', 'val_rec@10']
-    ylabels = ['Loss', 'Validation Recall@10']
-    i = 0
-    
-    for tp, ylabel in zip(to_plot, ylabels):
-        for df in dfs:
-            ax[i].plot(df[f'{tp}_mean'], lw=2, label=tp, color=color)
-            ax[i].fill_between(np.arange(len(df)), 
-                            df[f'{tp}_mean']+df[f'{tp}_std'], 
-                            df[f'{tp}_mean']-df[f'{tp}_std'], 
-                            facecolor=color, alpha=0.5)
-            ax[i].set_xlabel('Epoch', fontsize=25)
-            ax[i].set_ylabel(ylabel, fontsize=25)
-            ax[i].tick_params(axis='both', which='major', labelsize=25)
-        i += 1
+    fig.legend(final_results.keys(), loc='lower center', ncol=len(final_results.keys()), fontsize=25, bbox_to_anchor = [0.5,-0.015])
     
     if len(store_path) > 0:
         fig.savefig(store_path)
 
-        
-def plot_train_stats(dfs, color, size=(26,12), store_path=''):
-    """
-    """
-    fig, ax = plt.subplots(figsize=size, nrows=1, ncols=2)
-    to_plot = ['loss', 'val_rec@10']
-    ylabels = ['Loss', 'Validation Recall@10']
-    i = 0
+
+def plot_train_stat(final_results, stat, ylabel, label, file_names, titles, color, size=(25,25), store_path=''):
+    fig, ax = plt.subplots(figsize=size, nrows=len(file_names), ncols=1)
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.3)
+#     plt.tight_layout()
+
+    for i, file_name in enumerate(file_names):
+        mean = final_results[label]['stats'][file_name][f'{stat}_mean']
+        std = final_results[label]['stats'][file_name][f'{stat}_std']
+        ax[i].plot(np.arange(1, len(mean)+1), mean, lw=2, label=label, color=color)
+        ax[i].fill_between(np.arange(1, len(mean)+1), 
+                        mean + std, 
+                        mean - std,
+                        facecolor=color, alpha=0.5)
+        ax[i].set_xticks(np.arange(0, len(mean)+1, 5))
+        ax[i].set_title(f'{label} {titles[i]}', fontsize=30)
+        ax[i].set_ylabel(ylabel, fontsize=25)
+        ax[i].tick_params(axis='both', which='major', labelsize=25)
     
-    for tp, ylabel in zip(to_plot, ylabels):
-        for df in dfs:
-            ax[i].plot(df[f'{tp}_mean'], lw=2, label=tp, color=color)
-            ax[i].fill_between(np.arange(len(df)), 
-                            df[f'{tp}_mean']+df[f'{tp}_std'], 
-                            df[f'{tp}_mean']-df[f'{tp}_std'], 
-                            facecolor=color, alpha=0.5)
-            ax[i].set_xlabel('Epoch', fontsize=25)
-            ax[i].set_ylabel(ylabel, fontsize=25)
-            ax[i].tick_params(axis='both', which='major', labelsize=25)
-        i += 1
+    ax[i].set_xlabel('Epoch', fontsize=25)
     
     if len(store_path) > 0:
         fig.savefig(store_path)
+        
+        
+# def plot_train_stats(dfs, color, size=(26,12), store_path=''):
+#     """
+#     """
+#     to_plot = ['loss', 'val_rec@10', 'val_ndcg@10']
+#     ylabels = ['Loss', 'Validation Recall@10', 'Validation NDCG@10']
+#     fig, ax = plt.subplots(figsize=size, nrows=1, ncols=len(to_plot))
+#     i = 0
+    
+#     for tp, ylabel in zip(to_plot, ylabels):
+#         for df in dfs:
+#             ax[i].plot(df[f'{tp}_mean'], lw=2, label=tp, color=color)
+#             ax[i].fill_between(np.arange(len(df)), 
+#                             df[f'{tp}_mean']+df[f'{tp}_std'], 
+#                             df[f'{tp}_mean']-df[f'{tp}_std'], 
+#                             facecolor=color, alpha=0.5)
+#             ax[i].set_xlabel('Epoch', fontsize=25)
+#             ax[i].set_ylabel(ylabel, fontsize=25)
+#             ax[i].tick_params(axis='both', which='major', labelsize=25)
+#         i += 1
+    
+#     if len(store_path) > 0:
+#         fig.savefig(store_path)
         
         
 ############################################################################################################
