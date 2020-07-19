@@ -13,7 +13,7 @@ from Evaluation import get_metrics
 
 class NCF:
     """
-    Using the NCF we build Generalized Matrix Factorisation (GMF), Multiplayer Perceptron Matrix Factorisation (MLP) and combine the two     in Neural Matrix Factorisation (NeuMF)
+    1. Using the NCF we build Generalized Matrix Factorisation (GMF), Multiplayer Perceptron Matrix Factorisation (MLP) and combine the two     in Neural Matrix Factorisation (NeuMF)
     - paper: http://papers.www2017.com.au.s3-website-ap-southeast-2.amazonaws.com/proceedings/p173.pdf
     - blog: https://medium.com/@victorkohler/collaborative-filtering-using-deep-neural-networks-in-tensorflow-96e5d41a39a1
     - code: https://github.com/Leavingseason/NeuralCF/blob/master
@@ -33,6 +33,8 @@ class NCF:
     
     def build_GMF_model(self, seed=1234):
         """
+        Build the GMF model as specified in the information in 1. using the GMF_params
+        :param seed: random seed to be used for the initialisation
         """
         try:
             nolf = self.GMF_params['nolf']
@@ -80,8 +82,10 @@ class NCF:
         self.compile_model(model._name)
 
 
-    def build_MLP_model(self, optimizer='Adam', seed=1234):
+    def build_MLP_model(self, seed=1234):
         """
+        Build the MLP model as specified in the information in 1. using the MLP_params
+        :param seed: random seed to be used for the initialisation
         """
         try:
             layers = self.MLP_params['layers']
@@ -143,6 +147,7 @@ class NCF:
         
     def build_NeuMF_model(self):
         """
+        Build the NeuMF model as specified in the information in 1. using self.NeuMF_params
         """
         try:
             mf_nolf = self.NeuMF_params['nolf']
@@ -215,6 +220,8 @@ class NCF:
     
     def compile_model(self, model_name):
         """
+        compile the model named model_name with the optimizer specified in the corresponding models parameters
+        :param model_name: name of the model: GMF, MLP, NeuMF
         """
         model, params = self.get_model(model_name)
         if params['optimizer'] == 'Adam':
@@ -231,6 +238,13 @@ class NCF:
     
     def train_model(self, name, samples=[], train_set=[], val_set=[], verbose=1):
         """
+        Train model named name using pre-created samples
+        :param name: name of the model to be trained
+        :param samples: pre-created samples with 1 positive item and num_neg negative items (specified in corresponding params)
+        :param train_set: pandas df containing user_id and item_id
+        :param val_set: validation pandas df containing user_id and item_id
+        :param verbose: same as Keras.model.fit(verbose)
+        :return val_metrics: list of pandas dfs containing the validation metrics as calculated by Evaluation.get_metics during training
         """
         model, params = self.get_model(name)
         
@@ -253,6 +267,13 @@ class NCF:
     
     def fit(self, model, params, samples, train_set, val_set, verbose):
         """
+        Fit model in custom loop to be able to extract the recall@10 validation metric on the val_set
+        :param model: the model specified in self.train_model
+        :param params: the corresponding parameters specified in self.train_model
+        :param samples: samples from self.train_model
+        :param train_set: pandas df containing user_id and item_id
+        :param val_set: validation pandas df containing user_id and item_id
+        :return val_metrics: list of pandas dfs containing the validation metrics as calculated by Evaluation.get_metics during training
         """
         if verbose == 1:
             print(f'\nFitting {model._name} with parameters:')
@@ -293,6 +314,7 @@ class NCF:
     
     def create_samples(self, data, name=''):
         """
+        Non-optimal way of creating samples for model named name, please use sample_creation.ipynb
         """
         print(f'Creating Samples for {name}')
         
@@ -333,6 +355,12 @@ class NCF:
        
         
     def load_samples(self, sample_path, sample_name, n_samples):
+        """
+        Load the samples stored and created by sample_creation.ipynb, to be used outside this class
+        :param sample_path: where the samples are stored
+        :param sample_name: the name of the sample
+        :param n_samples: number of samples to be loaded
+        """
         samples = []
         pbar = progressbar.ProgressBar()
         for sample_num in pbar(range(n_samples)):
@@ -352,6 +380,9 @@ class NCF:
         
     def get_model(self, name):
         """
+        Returns the model matching the name parameter
+        :param name: the name of the model to be retrieved (with its parameters)
+        :return model, model_params: the Keras.model instance (GMF or MLP or NeuMF) and the corresponding parameters dict
         """
         if type(self.GMF) is not str and self.GMF._name == name:
             return self.GMF, self.GMF_params
@@ -365,6 +396,10 @@ class NCF:
             
     def use_pretrain_model(self, GMF_weights_path='', MLP_weights_path='', alpha=0.5):
         """
+        Whether to load pre-trained weights of GMF and MLP into NeuMF
+        :param GMF_weights_path: location of the GMF weights to be used in the GMF part of NeuMF
+        :param MLP_weights_path: location of the MLP weights to be used in the MLP part of NeuMF
+        :param alpha: proportion of GMF and MLP weights in the final dense layer
         """
         if len(GMF_weights_path) > 0:
             GMF_path = GMF_weights_path
@@ -410,6 +445,15 @@ class NCF:
         
     def get_predictions(self, name, train_set, test_set, rank_at=20, exclude_already_seen=True):
         """
+        Using the specified model to predict based on the test_set,
+        these predictions together with the true items are put in the ranked_df result
+        :param name: name of the model to use for predicting: GMF, MLP, NeuMF
+        :param train_set: pandas df containing user_id and item_id
+        :param test_set: pandas df containing: user_id, last item_id(s) per user, sorted on datetime per user
+        :param rank_at: maximum of top ranked items per user
+        :param exclude_already_seen: whether to exclude the items already seen in the train_set when predicting
+        :return: pandas df, where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+                 true_id extracted from test_set
         """
         model, _ = self.get_model(name)
         test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
@@ -437,8 +481,20 @@ class NCF:
         return ranked_df
         
     
-    def sample_prediction(self, name, train_set, test_set, train_items=[], val=False, sample_len=100, rank_at=20):
+    def sample_prediction(self, name, train_set, test_set, train_items=[], val=False, sample_len=100, rank_at=20, exclude_already_seen=True):
         """
+        Using the specified model to predict based on the test_set within a sample of negative items of len sample_len,
+        these predictions together with the true items are put in the ranked_df result
+        :param name: name of the model to use for predicting: GMF, MLP, NeuMF
+        :param train_set: pandas df containing user_id and item_id
+        :param test_set: pandas df containing: user_id, last item_id(s) per user, sorted on datetime per user
+        :param train_items: the items per user, for speed up when predicting on validation set during training
+        :param val: whether predictions are happening on validation set during training
+        :param sample_len: the sample length to predict in
+        :param rank_at: maximum of top ranked items per user
+        :param exclude_already_seen: whether to exclude the items already seen in the train_set when predicting
+        :return: pandas df, where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+                 true_id extracted from test_set
         """
         model, _ = self.get_model(name)
         if not val:
@@ -480,14 +536,24 @@ class NCF:
 
         return ranked_df
     
-    def get_raw_predictions(self, name, train, test, sample_len=0):
+    def get_raw_predictions(self, name, train_set, test_set, sample_len=0):
+        """
+        Using the specified model to predict based on the test_set within a sample of negative items of len sample_len,
+        these predictions together with the true items are put in the ranked_df result
+        :param name: name of the model to use for predicting: GMF, MLP, NeuMF
+        :param train_set: pandas df containing user_id and item_id
+        :param test_set: pandas df containing: user_id, last item_id(s) per user, sorted on datetime per user
+        :param sample_len: sample length > 0 and raw predictions will be returned based on a sample of negative items 
+                            with the held out item in the sample
+        :return all_preds: pandas df where each row represents a user with their corresponding list of predicted items
+        """
         all_preds = []
-        test_user_items = test.groupby('user_id')['item_id'].apply(list)
+        test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
         model, _ = self.get_model(name)
         if sample_len > 0:
-            user_items = train.groupby('user_id')['item_id'].apply(list)
-            test_user_items = test.groupby('user_id')['item_id'].apply(list)
-            train_items = train.item_id.unique()
+            user_items = train_set.groupby('user_id')['item_id'].apply(list)
+            test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
+            train_items = train_set.item_id.unique()
             
         pbar = progressbar.ProgressBar()
         for u in pbar(test_user_items.index):
@@ -512,17 +578,12 @@ class NCF:
     
     def store_model(self, path, additional_info={}, store=True):
         """
-        Storing the trained and/or tested LSTM model in:
-        1. An existing pandas dataframe if it already exists in path
-        2. A new pandas dataframe
+        Storing the results and parameters of the current model in row in a pandas df, will create a 
+        new df if none is found in path
         :param path: Where to store / add this dataframe with the existing model
-        :param params: Parameters used for the model
-        :param history: Training History of the model
-        :param train_time: Elapsed train time of the model
-        :param eval_metrics: Prediction Metrics
+        :param additional_info: additional metrics and/or info to be stored in the row
         :param store: Whether to actually store the df or return the df
-        :return: all_models dataframe which keeps track of:
-        TODO: Fill in list of columns from all_models
+        :return: all_models dataframe
         """
 
         final_results = {**additional_info, **self.history, **self.params}
@@ -536,5 +597,5 @@ class NCF:
 
         if store:
             all_models.to_pickle(path)
-            
-#         return all_models
+        else:
+            return all_models

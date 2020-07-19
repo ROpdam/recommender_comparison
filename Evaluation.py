@@ -10,17 +10,17 @@ K = tf.keras.backend
 # Papers used:
 # 1. Devooght, Robin, and Hugues Bersini. "Collaborative filtering with recurrent neural networks." arXiv preprint arXiv:1608.07400 (2016).
 
-def get_metrics(ranked_df, steps=5, max_rank=20, stats=True, ndcg=True):
+def get_metrics(ranked_df, steps=5, rank_at=20, stats=True, ndcg=True):
     """
-    Computes hitcount@, recall@ and precision@ for the given ranked_df on each step until the max_rank
+    Computes hitcount@, recall@ , precision@ and NDCG@n for the given ranked_df on each step until the rank_at
     :param ranked_df: pandas df where each row contains, user, a list: pred_items_ranked, a list: true items
-    :param steps: after rank@1 the steps to divide max_rank with and calculate the metrics with
-    :param max_rank: maximum rank to compute the metrics on
+    :param steps: after rank@1 the steps to divide rank_at with and calculate the metrics with
+    :param rank_at: maximum rank to compute the metrics on
     :param stats: print duration
-    :return: pandas df, where each row represents a rank@ value, the columns represent: hitcount@, recall@, precision@
+    :return: pandas df, where each row represents a rank@ value, the columns represent: hitcount@, recall@, precision@ and NDCG@n
     """
     s = time.time()
-    ranks_at = [1] + [i for i in range(steps, max_rank + steps, steps)]
+    ranks_at = [1] + [i for i in range(steps, rank_at + steps, steps)]
     hitcounts = []
     recs_at = []
     precs_at = []
@@ -56,6 +56,12 @@ def get_metrics(ranked_df, steps=5, max_rank=20, stats=True, ndcg=True):
 
 
 def getNDCG(ranklist, true_item):
+    """
+    Computes the single item NCDG value
+    :param ranklist: a list of ranked items
+    :param true_item: the true item of which the position has to be scored within ranklist
+    :return: NDCG@n, n being the length of the ranklist
+    """
     for i, item in enumerate(ranklist):
         if item == true_item[0]:
 #             print(math.log(2) / math.log(i+2))
@@ -65,6 +71,7 @@ def getNDCG(ranklist, true_item):
 
 def get_final_results(res):
     """
+    Aggregating the final results produced on a number of runs of the algorithms
     """
     # Create avg and std of metrics
     all_metrics = {'recall':pd.DataFrame() , 'hitcounts':pd.DataFrame() , 'ndcg':pd.DataFrame()}

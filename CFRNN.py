@@ -38,12 +38,11 @@ class CFRNN:
     
     def build_model(self, ckpt_dir='', return_sequences=True, initializer='glorot_uniform', summary=True):
         """
-        Building the LSTM model in Keras
-        :param total_items: Number of items from the full df
-        :param embedding_dim: Number of embedding dimensions (100)
-        :param mask_value: Value used for Masking, NOTE: total_items is used for padding and masking so embedding +1
-        :param rnn_units: Number of hidden units
-        :param batch_size: batch_size
+        Building a sequential LSTM model in Keras
+        :param return sequences: whether return sequences has to be True in the sequential RNN model
+        :param ckpt_dir: Location for storing the checkpoints
+        :param initializer: Which weight initializer to use
+        :param summary: True => print model.summary()
         :param return_sequences: True when training, False when predicitng next item
         :return: model of type tf.keras.model
         """
@@ -71,7 +70,16 @@ class CFRNN:
             print(model.summary())
     
     
-    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'timing'], initial_epoch=0, verbose=1, patience=15, append_hist=True):
+    def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'timing'], initial_epoch=0, verbose=1, patience=15):
+        """
+        Train the LSTM model, ths function only specifies which callbacks are used before calling self.fit
+        :param train_set: TF batch training set
+        :param val_set: TF batch validation set
+        :param callback_names: list of which callbacks to use, available: 'checkpoint', 'early_stopping', 'timing' (timing is defined in Helpers.py)
+        :param initial_epoch: same as Keras model
+        :param verbose: same as Keras model
+        :param patience: same as Keras model
+        """
         # Configure Callbacks
         all_callbacks = []
         if 'checkpoint' in callback_names:
@@ -87,10 +95,6 @@ class CFRNN:
                                                            mode = 'min',
                                                            patience = patience))
             
-#         if 'store_hist' in callback_names:
-#                  all_callbacks.append(tf.keras.callbacks.CSVLogger(self.hist_dir,
-#                                                               append=append_hist))
-            
         if 'timing' in callback_names:
             all_callbacks.append(TimingCallback())
         
@@ -98,6 +102,14 @@ class CFRNN:
         
         
     def fit(self, train_set, val_set, all_callbacks, initial_epoch, verbose):
+        """
+        Wrapper of Keras.model.fit function, storing the history in self.history
+        :param train_set: TF batch training set
+        :param val_set: TF batch validation set
+        :param all_callbacks: list of callbacks specified in self.train
+        :param initial_epoch: same as Keras model
+        :param verbose: same as Keras model
+        """
         print('Fitting LSTM with parameters:')
         print(pd.DataFrame.from_dict(self.params, orient='index')[0])
         self.history = self.model.fit(x=train_set, 
@@ -110,17 +122,14 @@ class CFRNN:
 
     def store_model(self, path, params, history, train_time, eval_metrics=[], store=True):
         """
-        Storing the trained and/or tested LSTM model in:
-        1. An existing pandas dataframe if it already exists in path
-        2. A new pandas dataframe
+        Storing the trained and/or tested LSTM results in a pandas dataframe
         :param path: Where to store / add this dataframe with the existing model
         :param params: Parameters used for the model
         :param history: Training History of the model
         :param train_time: Elapsed train time of the model
         :param eval_metrics: Prediction Metrics
         :param store: Whether to actually store the df or return the df
-        :return: all_models dataframe which keeps track of:
-        TODO: Fill in list of columns from all_models
+        :return: all_models dataframe containing rows of all CFRNN models stored in path
         """
         total_recall = 0
         if len(eval_metrics) > 0:
@@ -141,32 +150,29 @@ class CFRNN:
             all_models.to_pickle(path)
             
         return all_models
-
     
-    def recall_metric(self):
-        """
+    
+#     def recall_metric(self):
+#         """
 
-        :param labels:
-        :param logits:
-        :return:
-        """
-        def recall(labels, logits):
-            labels = K.one_hot(tf.dtypes.cast(labels, tf.int32), self.total_items)
-            labels = K.ones_like(labels)
-            true_positives = K.sum(K.round(K.clip(labels * logits, 0, 1)))
-            possible_positives = K.sum(K.round(K.clip(labels, 0, 1)))
-            r = true_positives / (possible_positives + K.epsilon())
-            return r
-        return recall
+#         :param labels:
+#         :param logits:
+#         :return:
+#         """
+#         def recall(labels, logits):
+#             labels = K.one_hot(tf.dtypes.cast(labels, tf.int32), self.total_items)
+#             labels = K.ones_like(labels)
+#             true_positives = K.sum(K.round(K.clip(labels * logits, 0, 1)))
+#             possible_positives = K.sum(K.round(K.clip(labels, 0, 1)))
+#             r = true_positives / (possible_positives + K.epsilon())
+#             return r
+#         return recall
 
 
     def create_diversity_bias(self, train_set):
         """
-        Pre-calculates the diversity bias needed in
-        :param train_set:
-        :param total_items:
-        :param delta:
-        :return:
+        Pre-calculates the diversity bias needed in the diversity_bias_loss, stores db in self.diversity_bias
+        :param train_set: the train_set as a pandas df: user_id, item_id, datetime
         """
         item_id_bins = np.zeros((1, self.total_items+1), np.float32)
         item_counts = train_set.groupby('item_id')['user_id'].count().sort_values(ascending=False)
@@ -184,8 +190,7 @@ class CFRNN:
 
     def diversity_bias_loss(self):
         """
-        Calculates Categorical Cross Entropy Loss divided by the diversity bias as defined in Paper 1
-        :param db: precalculated diversity bias per item_id
+        (decorator) Calculates Categorical Cross Entropy Loss divided by the diversity bias (self.diversity_bias created in self.create_diversity_bias)as defined in Paper 1
         :return: categorical cross entropy loss function adjusted by the diversity bias
         """
         def loss(labels, logits):
@@ -201,7 +206,6 @@ class CFRNN:
     def cce_loss(self):
         """
         Calculates Categorical Crossentropy Loss over the one hot encoded labels with the logits
-        :param total_items: Maximum item_id for one hot encoding
         :return: categorical cross entropy loss function
         """
         def loss(labels, logits):
@@ -211,6 +215,11 @@ class CFRNN:
 
     
     def compile_model(self, diversity_bias=True, train_set=[]):
+        """
+        Compiles the model build with self.build_LSTM, creating the diversity_bias when True and train_set is provided using Keras.model.compile
+        :param diversity_bias: whether to include the diversity bias in the loss or not
+        :param train_set: the pandas df train_set needed for the pre-calculation of the diversity_bias in create_diversity_bias
+        """
         if diversity_bias:
             if len(train_set) == 0:
                 raise Exception('Cannot create Diversity Bias without a train set')
@@ -228,12 +237,10 @@ class CFRNN:
         
     def create_seq_batch_tf_dataset(self, df, shift=1, stats=True, drop_remainder=True):
         """
-        :param df:
-        :param shift:
-        :param max_seq_len:
-        :param pad_value:
-        :param batch_size:
-        :param drop_remainder:
+        :param df: pandas df where each row consists of user_id, item_id and datetime (chronologically)
+        :param shift: how much to shift the x sequences
+        :param max_seq_len: maximum sequence length
+        :param drop_remainder: drop remainder as in tf.dataset.batch
         :return:
         """
         user_sequences_x, user_sequences_y, median = get_x_y_sequences(df, shift, stats=stats)
@@ -247,6 +254,10 @@ class CFRNN:
 
     
     def data_split(self, df, val=False):
+        """
+        Split df according to self.val_users, self.test_user
+        :param df: pandas df where each row consists of user_id, item_id and datetime (chronologically)
+        """
         if val:
             n = self.val_users
         else: 
@@ -260,14 +271,16 @@ class CFRNN:
     
     def get_predictions(self, train_set, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False, exclude_already_seen=True):
         """
-        Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
+        Uses the stored Keras LSTM model with batch size set to None to predict the rest of the sequences from the data per user.
         Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
         from the left_out df
-        :param test_set: Test or Validation set (pandas)
-        :param left_out_items: left out items (pandas)
+        :param train_set: pandas df where each row consists of user_id, item_id and datetime (chronologically) used in training
+        :param test_set: pandas df where each row consists of user_id, item_id and datetime (chronologically) to be used now (contains all but 1 item of the test users)
+        :param left_out_items: pandas df where each row consists of user_id, item_id and datetime (chronologically) with the held-out items
+        :param rank_at: maximum rank to compute the metrics on
         :param batch_size: batch_size==number of test users
-        :param pad_value: (mask_value) pad_value==total_items (as done while training)
-        :param rank_at: maximum number of predictions to make
+        :param summary: True => print model.summary()
+        :param exclude_already_seen: whether to exclude the items already seen in the train_set when predicting
         :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
                  true_id extracted from test_set (as input for Evaluation.get_metrics
         """
@@ -303,69 +316,12 @@ class CFRNN:
 
         return preds_df
 
-##################################################################################
-    
-#     def get_predictions(self, test_set, left_out_items, batch_size, rank_at, ckpt_dir='', summary=False):
-#         """
-#         Uses a Keras LSTM model with batch size set to None to predict the rest of the sequences from the      data per user.
-#         Finally creates predictions_df where each row represents user, a list pred_items_ranked and a list containing true_ids
-#         from the left_out df
-#         :param test_set: Test or Validation set (pandas)
-#         :param left_out_items: left out items (pandas)
-#         :param batch_size: batch_size==number of test users
-#         :param pad_value: (mask_value) pad_value==total_items (as done while training)
-#         :param rank_at: maximum number of predictions to make
-#         :return: pandas df where each row represents a user, the columns represent: pred_items_ranked at rank_at,
-#                  true_id extracted from test_set (as input for Evaluation.get_metrics
-#         """
-#         self.batch_size = None
-#         self.build_model(ckpt_dir=ckpt_dir, return_sequences=False, summary=summary)
-            
-#         n_batches = int(len(left_out_items) / batch_size)
-#         data_sequences, _, _ = get_x_y_sequences(test_set, stats=False)
-#         data_seqs_padded = standard_padding(data_sequences, self.max_seq_len, self.pad_value, eval=True, stats=False)
-#         data_seqs_splits = np.array_split(data_seqs_padded, n_batches, axis=0)
-        
-#         # Extend final predictions with predictions made on batches
-#         final_preds = []
-#         for split in data_seqs_splits:
-#             final_preds.extend(self.make_predictions(split, rank_at))
-
-#         # Get True items
-#         test_left_out_items = left_out_items.groupby('user_id')['item_id'].apply(list)
-
-#         preds_df = pd.DataFrame(list(zip(test_left_out_items.index, final_preds, list(test_left_out_items))),
-#                                 columns=['user', 'pred_items_ranked', 'true_id'])
-
-#         return preds_df
-
-
-#     def make_predictions(self, user_sequences, rank_at):
-#         """
-#         :param model:
-#         :param user_sequences:
-#         :param rank_at:
-#         :return:
-#         """
-#         final_preds = np.zeros((user_sequences.shape[0], rank_at), dtype='int32')
-#         for i in range(rank_at):
-#             predictions = self.model.predict(user_sequences)
-#             for u_index, prediction in enumerate(predictions):
-#                 pred_item_id = np.argmax(prediction)
-#                 final_preds[u_index][i] = pred_item_id
-
-#                 padding_values = np.where(user_sequences[u_index] == self.pad_value)[0]
-#                 if padding_values.shape[0] > 0:
-#                     first_pad_value = np.min(padding_values)
-#                     user_sequences[u_index][first_pad_value] = pred_item_id
-#                 else:
-#                     new_user_sequence = np.append(user_sequences[u_index], pred_item_id)[1:]
-#                     user_sequences[u_index] = new_user_sequence
-                    
-#         return final_preds
 
     # TODO: add store_path
     def plot_training(self):
+        """
+        Plot the training loss and validation loss
+        """
         his = self.history.history
         
         plt.plot(his['loss'])
@@ -374,8 +330,8 @@ class CFRNN:
         plt.title('Training Loss')
         plt.show()
         
-        plt.plot(his['recall'])
-        plt.plot(his['val_recall'])
-        plt.legend(['recall', 'val_recall'])
-        plt.title('Training Recall')
-        plt.show()
+#         plt.plot(his['recall'])
+#         plt.plot(his['val_recall'])
+#         plt.legend(['recall', 'val_recall'])
+#         plt.title('Training Recall')
+#         plt.show()

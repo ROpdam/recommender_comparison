@@ -44,12 +44,12 @@ class BPR():
 
     def train_model(self, train_set=[], val_set=[], sample_path='', verbose=1, patience=4, save_best=True):
         """
-        Fit BPR to the train_set, if val_set is provided the AUC metrics will be computed and printed per iteration
+        Fit BPR to the train_set, if val_set is provided the recall@10 metrics will be computed and printed per iteration (depending on verbose)
+        stores values in self.model, reads or creates the samples used in self.fit
         :param train_set: pandas df containing user_id and item_id
         :param val_set: validation pandas df containing user_id and item_id
-        :param verbose: 1 means print creating samples, loss per iteration and validation AUC during training
+        :param verbose: 1 means print creating samples, loss per iteration and validation recall@10 during training
                         (if val_set provided)
-        :return: -None: stores values in self.model
         """
         print(f'Training BPR on {self.n_iterations} samples of size {self.sample_size}')
         
@@ -75,6 +75,13 @@ class BPR():
         
     def fit(self, all_uij_samples, train_set, val_set, verbose, patience, save_best):
         """
+        Fits p and q to the uij samples provided by self.train_model
+        :param train_set: pandas df containing user_id and item_id
+        :param val_set: validation pandas df containing user_id and item_id
+        :param verbose: 1 means print creating samples, loss per iteration and validation recall@10 during training
+                        (if val_set provided)
+        :param patience: how many iterations without improvement on recall@10 (if val_set provided)
+        :param save_best: True => save the model with the largest recall@10 value during training
         """
         # Init user, item matrices and time
         p = np.random.normal(0, .1, (self.total_users, self.nolf))  # users
@@ -201,6 +208,9 @@ class BPR():
 
     
     def sigmoid(self, x):
+        """
+        calculate standard sigmoid 
+        """
         try:
             return 1 / (1 + math.exp(-x))
         except OverflowError:
@@ -210,7 +220,7 @@ class BPR():
     
     def update_alpha(self, last_loss, it_loss):
         """
-        Adjust learning rate according to the bold driver principle
+        Adjust learning rate according to the bold-driver heuristic (using sigma and rho from parameters)
         :param last_loss: loss of previous iteration
         :param it_loss: current loss
         :return: -None: changes the learning rate alpha of the model
@@ -243,12 +253,14 @@ class BPR():
     def store_model(self, log_path, res_name, other_info={}, stats=True, gs=False):
         """
         Store the model as a row in a pandas df (pickle) named res_name, stores: train loss, val_auc, train_time,
-        learning_rates, file_name, p and q factors
+        learning_rates, file_name, p and q factors and parameters
         :param log_path: where to store/find the results
         :param res_name: the name of the results pandas df, if name is not found, a new pandas df is created and
                          stored (pickle)
         :param file_name: the name of the dataset file
+        :param other_info: any additional metric or info to be stored
         :param stats: print whether new results are created or the current model is added to an existing pandas df
+        :param gs: whether the model is run in a grid search (p and q will not be stored)
         :return: -None:
         """
         if gs:
@@ -274,12 +286,13 @@ class BPR():
 
     def get_predictions(self, train_set, test_set, rank_at=20, stats=True, exclude_already_seen=True):
         """
-        The provided MF model is used to obtain values for all items per user from the test set
-        and rank at rank_at per user, finally the true items are put together in the ranked_df result
-        :param model: dict containing the p (user) and q (item) factors from a matrix factorisation model
+        The self.p and self.q matrices are used to predict the next items of the users in the test set, 
+        these predictions together with the true items are put in the ranked_df result
+        :param train_set: pandas df containing user_id and item_id
         :param test_set: pandas df containing: user_id, last item_id(s) per user, sorted on datetime per user
         :param rank_at: maximum of top ranked items per user
         :param stats: print duration
+        :param exclude_already_seen: whether to exclude the items already seen in the train_set when predicting
         :return: pandas df, where each row represents a user, the columns represent: pred_items_ranked at rank_at,
                  true_id extracted from test_set
         """
@@ -318,6 +331,18 @@ class BPR():
     
     
     def sample_prediction(self, train_set, test_set, sample_len=100, rank_at=20, exclude_already_seen=True):
+        """
+        The self.p and self.q matrices are used to predict the next items of the users in the test set based 
+        on a sample of sample_len of items (containing the true item), 
+        these predictions together with the true items are put in the ranked_df result
+        :param train_set: pandas df containing user_id and item_id
+        :param test_set: pandas df containing: user_id, last item_id(s) per user, sorted on datetime per user
+        :param sample_len: the sample length to predict in
+        :param rank_at: maximum of top ranked items per user
+        :param exclude_already_seen: whether to exclude the items already seen in the train_set when predicting
+        :return: pandas df, where each row represents a user, the columns represent: pred_items_ranked at rank_at,
+                 true_id extracted from test_set
+        """
         user_items = train_set.groupby('user_id')['item_id'].apply(list)
         test_user_items = test_set.groupby('user_id')['item_id'].apply(list)
         train_items = train_set.item_id.unique()
@@ -350,6 +375,9 @@ class BPR():
 
     
     def plot_training(self):
+        """
+        Plot training loss, validation recall@10 and validation NDCG@10 of the currently stored model
+        """
         his = self.model
         fig, axes = plt.subplots(3, 1, figsize=(12,8))
         fig.subplots_adjust(hspace=0.4)
