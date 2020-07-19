@@ -138,10 +138,8 @@ class BPR():
                     best_p = p
                     best_q = q
                     pat = patience #Back to normal after better val score
-#                     print('best updated')
                     
                 elif save_best and iteration > 0:
-#                     print('no improvement')
                     pat -= 1
                 
                 self.model['all_val_rec@10'].append(val_rec_10)
