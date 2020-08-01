@@ -24,13 +24,13 @@ The data used for this research:
     - Ni, J., Li, J., & McAuley, J. (2019, November). Justifying recommendations using distantly-labeled reviews and fine-grained aspects. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) (pp. 188-197).
     
 The data needs to be in the following format
-```
 | user_id       | item_id       | datetime             |
-| ------------- |:-------------:| --------------------:|
+|:-------------:|:-------------:|:--------------------:|
 | 0             | 392           | 2000-12-31 22:00:19  |
 | 0             | 3189          | 2000-01-15 10:00:00  |
 | 0             | 1093          | 2000-01-21 16:15:29  |
-```
+| ...           | ...           | ...                  |
+| n             | 457           | 2000-01-13 09:34:00  |
 
 ### 2. Repository Map
 ```
