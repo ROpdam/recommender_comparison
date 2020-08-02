@@ -19,7 +19,6 @@ class CFRNN:
         self.total_users = total_users
         self.total_items = total_items
         self.params = params
-        self.train_time = params['train_time']
         self.epochs = params['epochs']
         self.batch_size = params['BATCH_SIZE']
         self.learning_rate = params['learning_rate']
@@ -29,9 +28,6 @@ class CFRNN:
         self.rnn_units = params['rnn_units']
         self.ckpt_dir = params['ckpt_dir']
         self.pad_value = params['pad_value']
-        self.test_users = params['test_users']
-        self.val_users = params['val_users']
-        self.model = []
         self.history = {}
         self.diversity_bias = []
      
@@ -72,7 +68,7 @@ class CFRNN:
     
     def train(self, train_set, val_set, callback_names=['checkpoint', 'early_stopping', 'timing'], initial_epoch=0, verbose=1, patience=15):
         """
-        Train the LSTM model, ths function only specifies which callbacks are used before calling self.fit
+        Train the LSTM model, ths function only specifies which callbacks are used before calling self.fit, checkpoint callbacks to obtain training metrics
         :param train_set: TF batch training set
         :param val_set: TF batch validation set
         :param callback_names: list of which callbacks to use, available: 'checkpoint', 'early_stopping', 'timing' (timing is defined in Helpers.py)
@@ -230,8 +226,8 @@ class CFRNN:
             loss = self.cce_loss()
         
         optimizer = tf.keras.optimizers.Adagrad(lr=self.learning_rate)
-        metrics = [self.recall_metric()]
-        self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+#         metrics = [self.recall_metric()]
+        self.model.compile(optimizer=optimizer, loss=loss)
         print('Compiled LSTM')
         
         
