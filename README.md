@@ -74,11 +74,15 @@ Required Python Libraries for the repository:
 * time
 * progressbar
 * math
+* sys
+* inspect
+* multiprocessing
+* csv
 
 ****
 ### 5. Contact
 
-This is the work of Robin Opdam, if you feel the need to contact me:
+This is the work of Robin Opdam for YGroup companies and the Vrije Universiteit Amsterdam, if you feel the need to contact me:
 
 * robinopdam@hotmail.com
 
