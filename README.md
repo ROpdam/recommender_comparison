@@ -1,8 +1,8 @@
-## Recommender Systems
+# Comparison of Deep Learning Product Recommendation Engines in Different Settings
 
 ### 1. About This Repository
 
-This repository contains the source code for the Master Thesis of Robin Opdam, for his completion of the MSc. Business Analytics at the Vrije Universiteit Amsterdam. The subject of this thesis is a ["Comparison of Deep Learning Recommendation Engines in Different Settings"](https://science.vu.nl/en/education/internship-office-for-mathematics-and-computer-science/master-project-ba/internship-papers-online/index.aspx) and compares the following models:
+This repository contains the source code for the Master Thesis of Robin Opdam for his completion of the MSc. Business Analytics at the Vrije Universiteit Amsterdam in cooperation with YGroup. The subject of this thesis is a ["Comparison of Deep Learning Recommendation Engines in Different Settings"](https://science.vu.nl/en/education/internship-office-for-mathematics-and-computer-science/master-project-ba/internship-papers-online/index.aspx) and compares the following models:
 
 * Bayesian Personalised Ranking
     - Rendle, S., Freudenthaler, C., Gantner, Z., & Schmidt-Thieme, L. (2012). BPR: [Bayesian personalized ranking from implicit feedback](https://arxiv.org/pdf/1205.2618.pdf). arXiv preprint arXiv:1205.2618.
@@ -21,7 +21,6 @@ The data used for this research:
     - Ni, J., Li, J., & McAuley, J. (2019, November). Justifying recommendations using distantly-labeled reviews and fine-grained aspects. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) (pp. 188-197).
 
 * [Amazon Shoes Clothing and Jewellery 5-core subset structured more like MovieLens 1M (Am-like-ML)](https://grouplens.org/datasets/movielens/1m/)
-    - Ni, J., Li, J., & McAuley, J. (2019, November). Justifying recommendations using distantly-labeled reviews and fine-grained aspects. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) (pp. 188-197).
     
 The data needs to be in the following format
 
@@ -85,7 +84,4 @@ Required Python Libraries for the repository:
 This is the work of Robin Opdam for YGroup companies and the Vrije Universiteit Amsterdam, if you feel the need to contact me:
 
 * robinopdam@hotmail.com
-
-
-<!-- ##### This repository is confidential and shall in no case be shared with entities outside of the organizaiton  -->
 
