@@ -23,7 +23,6 @@ The data used for this research:
 * [Amazon Shoes Clothing and Jewellery 5-core subset structured more like MovieLens 1M (Am-like-ML)](https://grouplens.org/datasets/movielens/1m/)
     
 The data needs to be in the following format
-
 | user_id | item_id | datetime            |
 |---------|---------|---------------------|
 | 0       | 392     | 2000-12-31 22:00:19 |
@@ -31,7 +30,6 @@ The data needs to be in the following format
 | 0       | 1093    | 2000-01-21 16:15:29 |
 |...      |...      |...                  |
 | n       | 457     | 2000-01-13 09:34:00 |
-
 ### 2. Repository Map
 ```
 recommender_systems
