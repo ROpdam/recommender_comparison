@@ -79,9 +79,12 @@ Required Python Libraries for the repository:
 * csv
 
 ****
-### 5. Contact
+### 4. Contact & Info
 
 This is the work of Robin Opdam for YGroup companies and the Vrije Universiteit Amsterdam, if you feel the need to contact me:
 
 * robinopdam@hotmail.com
+
+For more info:
+* https://ropdam.github.io
 
