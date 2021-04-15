@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow as tf
 from Data_prep import standard_padding, get_x_y_sequences
 import math
-import time
 K = tf.keras.backend
 
 # Papers used:
