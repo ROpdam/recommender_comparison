@@ -79,7 +79,7 @@ Required Python Libraries for the repository:
 ****
 ### 4. Contact & Info
 
-This is the work of Robin Opdam for [Metyis](https://metyis.com/) and the [Vrije Universiteit Amsterdam](https://vu.nl/en), if you feel the need to contact me:
+This is the work of Robin Opdam for [Metyis](https://metyis.com/) and the [Vrije Universiteit Amsterdam](https://vu.nl/en), feel free to reach out!
 
 * robinopdam@hotmail.com
 
