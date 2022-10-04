@@ -2,7 +2,7 @@
 
 ### 1. About This Repository
 
-This repository contains the source code for the Master Thesis of Robin Opdam for his completion of the MSc. Business Analytics at the Vrije Universiteit Amsterdam in cooperation with Metyis. The subject of this thesis is a ["Comparison of Deep Learning Recommendation Engines in Different Settings"](https://science.vu.nl/en/education/internship-office-for-mathematics-and-computer-science/master-project-ba/internship-papers-online/index.aspx) and compares the following models:
+This repository contains the source code for the Master Thesis of Robin Opdam for his completion of the MSc. Business Analytics at the Vrije Universiteit Amsterdam in cooperation with Metyis. The subject of this thesis is a ["Comparison of Deep Learning Recommendation Engines in Different Settings"](https://vu-business-analytics.github.io/internship-office/reports/report-opdam.pdf) and compares the following models:
 
 * Bayesian Personalised Ranking
     - Rendle, S., Freudenthaler, C., Gantner, Z., & Schmidt-Thieme, L. (2012). BPR: [Bayesian personalized ranking from implicit feedback](https://arxiv.org/pdf/1205.2618.pdf). arXiv preprint arXiv:1205.2618.
